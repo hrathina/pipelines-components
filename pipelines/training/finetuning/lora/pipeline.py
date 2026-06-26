@@ -140,7 +140,7 @@ def lora_pipeline(
         A 5-stage ML pipeline for fine-tuning language models with LoRA:
 
         1) Dataset Download - Prepares training data from HuggingFace, S3, or HTTP
-        2) OCI Model Resolution - Resolves OCI model URIs or passes through HF model IDs
+        2) OCI Model Resolution - Resolves OCI URIs to PVC paths or passes through HF URIs
         3) LoRA Training - Fine-tunes using unsloth backend (low-rank adapters)
         4) Evaluation - Evaluates with lm-eval harness (MMLU, GSM8K, etc.)
         5) Model Registry - Registers trained model to Kubeflow Model Registry
