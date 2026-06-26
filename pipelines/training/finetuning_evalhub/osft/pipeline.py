@@ -19,6 +19,11 @@ from components.deployment.kubeflow_model_registry import (
     kubeflow_model_registry as model_registry,
 )
 from components.evaluation.evalhub.kserve import evalhub_evaluator_kserve
+from components.training.finetuning.oci_utils import (
+    copy_oci_model_to_pvc,
+    is_oci_uri,
+    passthrough_uri,
+)
 from components.training.finetuning.osft import train_model
 
 # =============================================================================
@@ -208,12 +213,38 @@ def osft_pipeline_evalhub(
     )
 
     # =========================================================================
-    # Stage 2: OSFT Training
+    # Stage 2: OCI Model Resolution
+    # =========================================================================
+    oci_check = is_oci_uri(uri=phase_02_train_man_train_model)
+    oci_check.set_caching_options(False)
+    kfp.kubernetes.set_image_pull_policy(oci_check, "IfNotPresent")
+
+    with dsl.If(oci_check.output == "true"):
+        model_import = dsl.importer(
+            artifact_uri=phase_02_train_man_train_model,
+            artifact_class=dsl.Model,
+            reimport=False,
+        )
+        oci_copy = copy_oci_model_to_pvc(
+            model=model_import.output,
+            pvc_mount_path=dsl.WORKSPACE_PATH_PLACEHOLDER,
+        )
+        oci_copy.set_caching_options(False)
+        kfp.kubernetes.set_image_pull_policy(oci_copy, "IfNotPresent")
+
+    with dsl.Else():
+        hf_pass = passthrough_uri(value=phase_02_train_man_train_model)
+        kfp.kubernetes.set_image_pull_policy(hf_pass, "IfNotPresent")
+
+    resolved_model = dsl.OneOf(oci_copy.output, hf_pass.output)
+
+    # =========================================================================
+    # Stage 3: OSFT Training
     # =========================================================================
     training_task = train_model(
         pvc_path=dsl.WORKSPACE_PATH_PLACEHOLDER,
         dataset=dataset_download_task.outputs["train_dataset"],
-        training_base_model=phase_02_train_man_train_model,
+        training_base_model=resolved_model,
         training_unfreeze_rank_ratio=phase_02_train_man_train_unfreeze,
         training_effective_batch_size=phase_02_train_man_train_batch,
         training_max_tokens_per_gpu=phase_02_train_man_train_tokens,
@@ -253,15 +284,8 @@ def osft_pipeline_evalhub(
         optional=False,
     )
 
-    kfp.kubernetes.use_secret_as_env(
-        task=training_task,
-        secret_name="oci-pull-secret-model-download",
-        secret_key_to_env={"OCI_PULL_SECRET_MODEL_DOWNLOAD": "OCI_PULL_SECRET_MODEL_DOWNLOAD"},
-        optional=True,
-    )
-
     # =========================================================================
-    # Stage 3: Evaluation via Eval Hub (KServe)
+    # Stage 4: Evaluation via Eval Hub (KServe)
     # =========================================================================
     eval_task = evalhub_evaluator_kserve(
         pvc_mount_path=dsl.WORKSPACE_PATH_PLACEHOLDER,
@@ -291,7 +315,7 @@ def osft_pipeline_evalhub(
         )
 
     # =========================================================================
-    # Stage 4: Model Registry
+    # Stage 5: Model Registry
     # =========================================================================
     model_registry_task = model_registry(
         pvc_mount_path=dsl.WORKSPACE_PATH_PLACEHOLDER,
