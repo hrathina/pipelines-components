@@ -360,7 +360,7 @@ def lora_pipeline_evalhub(
         collection_id=phase_03_eval_opt_collection,
         benchmarks=phase_03_eval_opt_benchmarks,
         evalhub_model_name="finetuned-model",
-        base_model_name=phase_02_train_man_train_model,
+        base_model_name=resolved_model,
         evalhub_job_name="lora-pipeline-eval",
         evalhub_timeout=phase_03_eval_opt_timeout,
         evalhub_poll_interval=30,
