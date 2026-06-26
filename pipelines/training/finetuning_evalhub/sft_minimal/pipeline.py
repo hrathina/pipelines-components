@@ -1,11 +1,12 @@
 """SFT (Supervised Fine-Tuning) Training Pipeline — Eval Hub Minimal variant.
 
-A 4-stage pipeline for standard supervised fine-tuning with minimal
+A 5-stage pipeline for standard supervised fine-tuning with minimal
 evaluation configuration:
 1. Dataset Download
-2. SFT Training (instructlab-training backend)
-3. Evaluation via Eval Hub (KServe InferenceService for model serving)
-4. Model Registry
+2. OCI Model Resolution
+3. SFT Training (instructlab-training backend)
+4. Evaluation via Eval Hub (KServe InferenceService for model serving)
+5. Model Registry
 """
 
 import kfp

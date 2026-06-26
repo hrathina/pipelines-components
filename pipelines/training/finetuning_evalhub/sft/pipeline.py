@@ -1,10 +1,11 @@
 """SFT (Supervised Fine-Tuning) Training Pipeline — Eval Hub variant.
 
-A 4-stage pipeline for standard supervised fine-tuning:
+A 5-stage pipeline for standard supervised fine-tuning:
 1. Dataset Download
-2. SFT Training (instructlab-training backend)
-3. Evaluation via Eval Hub (KServe InferenceService for model serving)
-4. Model Registry
+2. OCI Model Resolution
+3. SFT Training (instructlab-training backend)
+4. Evaluation via Eval Hub (KServe InferenceService for model serving)
+5. Model Registry
 """
 
 import kfp
@@ -105,13 +106,14 @@ def sft_pipeline_evalhub(
 ):
     """SFT Training Pipeline with Eval Hub evaluation (KServe).
 
-    A 4-stage ML pipeline for fine-tuning language models:
+    A 5-stage ML pipeline for fine-tuning language models:
 
     1) Dataset Download - Prepares training data from HuggingFace, S3, or HTTP
-    2) SFT Training - Fine-tunes using instructlab-training backend
-    3) Evaluation - Evaluates via Eval Hub with a KServe InferenceService for
+    2) OCI Model Resolution - Resolves OCI URIs to PVC paths or passes through HF URIs
+    3) SFT Training - Fine-tunes using instructlab-training backend
+    4) Evaluation - Evaluates via Eval Hub with a KServe InferenceService for
        model serving. Results optionally tracked in MLflow.
-    4) Model Registry - Registers trained model to Kubeflow Model Registry
+    5) Model Registry - Registers trained model to Kubeflow Model Registry
 
     Prerequisites: Eval Hub and KServe must be installed on the cluster.
     The pipeline ServiceAccount needs RBAC permissions for

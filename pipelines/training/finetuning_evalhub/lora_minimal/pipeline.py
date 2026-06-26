@@ -1,11 +1,12 @@
 """LoRA (Low-Rank Adaptation) Training Pipeline — Eval Hub Minimal variant.
 
-A 4-stage pipeline for parameter-efficient fine-tuning with minimal
+A 5-stage pipeline for parameter-efficient fine-tuning with minimal
 evaluation configuration:
 1. Dataset Download
-2. LoRA Training (unsloth backend)
-3. Evaluation via Eval Hub (KServe InferenceService for model serving)
-4. Model Registry
+2. OCI Model Resolution
+3. LoRA Training (unsloth backend)
+4. Evaluation via Eval Hub (KServe InferenceService for model serving)
+5. Model Registry
 """
 
 import kfp

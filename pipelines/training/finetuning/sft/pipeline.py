@@ -1,10 +1,11 @@
 """SFT (Supervised Fine-Tuning) Training Pipeline.
 
-A 4-stage pipeline for standard supervised fine-tuning:
+A 5-stage pipeline for standard supervised fine-tuning:
 1. Dataset Download
-2. SFT Training (instructlab-training backend)
-3. Evaluation with lm-eval
-4. Model Registry
+2. OCI Model Resolution
+3. SFT Training (instructlab-training backend)
+4. Evaluation with lm-eval
+5. Model Registry
 
 SFT is the standard approach for adapting pre-trained language models
 to new tasks or domains using labeled training data.
@@ -105,12 +106,13 @@ def sft_pipeline(
 ):
     """SFT Training Pipeline - Standard supervised fine-tuning with instructlab-training.
 
-    A 4-stage ML pipeline for fine-tuning language models:
+    A 5-stage ML pipeline for fine-tuning language models:
 
     1) Dataset Download - Prepares training data from HuggingFace, S3, or HTTP
-    2) SFT Training - Fine-tunes using instructlab-training backend
-    3) Evaluation - Evaluates with lm-eval harness (MMLU, GSM8K, etc.)
-    4) Model Registry - Registers trained model to Kubeflow Model Registry
+    2) OCI Model Resolution - Resolves OCI URIs to PVC paths or passes through HF URIs
+    3) SFT Training - Fine-tunes using instructlab-training backend
+    4) Evaluation - Evaluates with lm-eval harness (MMLU, GSM8K, etc.)
+    5) Model Registry - Registers trained model to Kubeflow Model Registry
 
     Args:
         phase_01_dataset_man_data_uri: Dataset location (hf://, s3://, https://).

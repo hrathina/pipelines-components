@@ -36,6 +36,7 @@ def copy_oci_model_to_pvc(
 
     src = model.path
     dest = os.path.join(pvc_mount_path, "model")
+    shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest, exist_ok=True)
 
     if not os.path.exists(src):

@@ -1,10 +1,11 @@
 """OSFT (Orthogonal Subspace Fine-Tuning) Training Pipeline — Eval Hub variant.
 
-A 4-stage pipeline for continual learning without catastrophic forgetting:
+A 5-stage pipeline for continual learning without catastrophic forgetting:
 1. Dataset Download
-2. OSFT Training (mini-trainer backend)
-3. Evaluation via Eval Hub (KServe InferenceService for model serving)
-4. Model Registry
+2. OCI Model Resolution
+3. OSFT Training (mini-trainer backend)
+4. Evaluation via Eval Hub (KServe InferenceService for model serving)
+5. Model Registry
 
 OSFT enables adapting pre-trained or instruction-tuned models to new tasks
 while preserving their original capabilities.
@@ -111,13 +112,14 @@ def osft_pipeline_evalhub(
 ):
     """OSFT Training Pipeline with Eval Hub evaluation (KServe).
 
-    A 4-stage ML pipeline for fine-tuning language models with OSFT:
+    A 5-stage ML pipeline for fine-tuning language models with OSFT:
 
     1) Dataset Download - Prepares training data from HuggingFace, S3, or HTTP
-    2) OSFT Training - Fine-tunes using mini-trainer backend (orthogonal subspace)
-    3) Evaluation - Evaluates via Eval Hub with a KServe InferenceService for
+    2) OCI Model Resolution - Resolves OCI URIs to PVC paths or passes through HF URIs
+    3) OSFT Training - Fine-tunes using mini-trainer backend (orthogonal subspace)
+    4) Evaluation - Evaluates via Eval Hub with a KServe InferenceService for
        model serving. Results optionally tracked in MLflow.
-    4) Model Registry - Registers trained model to Kubeflow Model Registry
+    5) Model Registry - Registers trained model to Kubeflow Model Registry
 
     Prerequisites: Eval Hub and KServe must be installed on the cluster.
     The pipeline ServiceAccount needs RBAC permissions for

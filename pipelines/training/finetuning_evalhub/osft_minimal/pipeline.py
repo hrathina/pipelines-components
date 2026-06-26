@@ -1,11 +1,12 @@
 """OSFT (Orthogonal Subspace Fine-Tuning) Training Pipeline — Eval Hub Minimal variant.
 
-A 4-stage pipeline for continual learning without catastrophic forgetting
+A 5-stage pipeline for continual learning without catastrophic forgetting
 with minimal evaluation configuration:
 1. Dataset Download
-2. OSFT Training (mini-trainer backend)
-3. Evaluation via Eval Hub (KServe InferenceService for model serving)
-4. Model Registry
+2. OCI Model Resolution
+3. OSFT Training (mini-trainer backend)
+4. Evaluation via Eval Hub (KServe InferenceService for model serving)
+5. Model Registry
 """
 
 import kfp

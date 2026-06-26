@@ -1,10 +1,11 @@
 """LoRA (Low-Rank Adaptation) Training Pipeline — Eval Hub variant.
 
-A 4-stage pipeline for parameter-efficient fine-tuning:
+A 5-stage pipeline for parameter-efficient fine-tuning:
 1. Dataset Download
-2. LoRA Training (unsloth backend)
-3. Evaluation via Eval Hub (KServe InferenceService for model serving)
-4. Model Registry
+2. OCI Model Resolution
+3. LoRA Training (unsloth backend)
+4. Evaluation via Eval Hub (KServe InferenceService for model serving)
+5. Model Registry
 
 LoRA enables efficient fine-tuning by training low-rank adapter matrices
 instead of full model weights, dramatically reducing compute and memory.
@@ -133,13 +134,14 @@ def lora_pipeline_evalhub(
 ):
     """LoRA Training Pipeline with Eval Hub evaluation (KServe).
 
-    A 4-stage ML pipeline for fine-tuning language models with LoRA:
+    A 5-stage ML pipeline for fine-tuning language models with LoRA:
 
     1) Dataset Download - Prepares training data from HuggingFace, S3, or HTTP
-    2) LoRA Training - Fine-tunes using unsloth backend (low-rank adapters)
-    3) Evaluation - Evaluates via Eval Hub with a KServe InferenceService for
+    2) OCI Model Resolution - Resolves OCI URIs to PVC paths or passes through HF URIs
+    3) LoRA Training - Fine-tunes using unsloth backend (low-rank adapters)
+    4) Evaluation - Evaluates via Eval Hub with a KServe InferenceService for
        model serving. Results optionally tracked in MLflow.
-    4) Model Registry - Registers trained model to Kubeflow Model Registry
+    5) Model Registry - Registers trained model to Kubeflow Model Registry
 
     Prerequisites: Eval Hub and KServe must be installed on the cluster.
     The pipeline ServiceAccount needs RBAC permissions for
