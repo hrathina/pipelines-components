@@ -42,6 +42,12 @@ def copy_oci_model_to_pvc(
     if not os.path.exists(src):
         raise RuntimeError(f"Model path not found: {src}")
 
+    for dirpath, dirnames, filenames in os.walk(src):
+        for name in [*dirnames, *filenames]:
+            candidate = os.path.join(dirpath, name)
+            if os.path.islink(candidate):
+                raise RuntimeError(f"Refusing symlink in OCI model contents: {candidate}")
+
     count = 0
     for item in os.listdir(src):
         s = os.path.join(src, item)
