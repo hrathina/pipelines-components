@@ -6,18 +6,13 @@ import shutil
 
 
 def find_model_dir(root: str):
-    """Find the newest model checkpoint below root."""
+    """Find the best model checkpoint produced by Speculator training."""
     if not os.path.isdir(root):
         return None
-    candidates = []
-    for directory, _, files in os.walk(root):
-        if "config.json" in files:
-            candidates.append((os.path.getmtime(os.path.join(directory, "config.json")), directory))
-    if candidates:
-        return max(candidates)[1]
-    directories = [os.path.join(root, entry) for entry in os.listdir(root)]
-    directories = [directory for directory in directories if os.path.isdir(directory)]
-    return max(directories, key=os.path.getmtime, default=None)
+    best_dir = os.path.join(root, "checkpoint_best")
+    if os.path.isfile(os.path.join(best_dir, "config.json")):
+        return best_dir
+    return None
 
 
 def persist_model(ckpt_dir: str, pvc_path: str, model_name: str, output_model, log: logging.Logger) -> None:
