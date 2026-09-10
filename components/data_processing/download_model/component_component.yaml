@@ -1,0 +1,143 @@
+# PIPELINE DEFINITION
+# Name: download-model
+# Description: Download a HuggingFace model to a PVC for caching.
+#              If the model is already present on the PVC, skips the download.
+# Inputs:
+#    download_enabled: bool [Default: True]
+#    model_cache_mount: str [Default: '/mnt/models']
+#    model_cache_pvc: str
+#    model_name: str
+# Outputs:
+#    Output: str
+components:
+  comp-download-model:
+    executorLabel: exec-download-model
+    inputDefinitions:
+      parameters:
+        download_enabled:
+          defaultValue: true
+          description: If False, return the expected model directory without downloading.
+          isOptional: true
+          parameterType: BOOLEAN
+        model_cache_mount:
+          defaultValue: /mnt/models
+          description: Mount path for the model cache PVC.
+          isOptional: true
+          parameterType: STRING
+        model_cache_pvc:
+          description: Name of the PVC to store models (unused here, mounted via pipeline).
+          parameterType: STRING
+        model_name:
+          description: HuggingFace model ID (e.g. 'mistralai/Mistral-7B-Instruct-v0.3').
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-download-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - download_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'huggingface_hub>=0.20.0'\
+          \  &&  python3 -m pip install --quiet --no-warn-script-location 'kfp==2.16.1'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef download_model(\n    model_name: str,\n    model_cache_pvc: str,\n\
+          \    model_cache_mount: str = \"/mnt/models\",\n    download_enabled: bool\
+          \ = True,\n) -> str:\n    \"\"\"Download a HuggingFace model to a PVC for\
+          \ caching.\n\n    If the model is already present on the PVC, skips the\
+          \ download.\n\n    Args:\n        model_name: HuggingFace model ID (e.g.\
+          \ 'mistralai/Mistral-7B-Instruct-v0.3').\n        model_cache_pvc: Name\
+          \ of the PVC to store models (unused here, mounted via pipeline).\n    \
+          \    model_cache_mount: Mount path for the model cache PVC.\n        download_enabled:\
+          \ If False, return the expected model directory without downloading.\n\n\
+          \    Returns:\n        The PVC sub-path where the model is stored.\n   \
+          \ \"\"\"\n    import os\n\n    from huggingface_hub import snapshot_download\n\
+          \n    model_dir_name = model_name.replace(\"/\", \"--\")\n    model_path\
+          \ = os.path.join(model_cache_mount, model_dir_name)\n    if not download_enabled:\n\
+          \        print(f\"Model download disabled; expected model path is {model_path}.\"\
+          )\n        return model_dir_name\n    sentinel = os.path.join(model_path,\
+          \ \".download_complete\")\n\n    if os.path.exists(sentinel):\n        file_count\
+          \ = sum(1 for _ in os.scandir(model_path) if _.is_file())\n        print(f\"\
+          Model '{model_name}' already cached at {model_path} ({file_count} files).\
+          \ Skipping download.\")\n        return model_dir_name\n\n    print(f\"\
+          Downloading model '{model_name}' to {model_path}...\")\n    snapshot_download(\n\
+          \        repo_id=model_name,\n        local_dir=model_path,\n        local_dir_use_symlinks=False,\n\
+          \    )\n\n    with open(sentinel, \"w\") as f:\n        f.write(model_name)\n\
+          \n    file_count = sum(1 for _ in os.scandir(model_path) if _.is_file())\n\
+          \    print(f\"Model '{model_name}' downloaded to {model_path} ({file_count}\
+          \ files).\")\n    return model_dir_name\n\n"
+        image: registry.redhat.io/rhoai/odh-pipeline-runtime-datascience-cpu-py312-rhel9@sha256:f9844dc150592a9f196283b3645dda92bd80dfdb3d467fa8725b10267ea5bdbc
+pipelineInfo:
+  name: download-model
+root:
+  dag:
+    outputs:
+      parameters:
+        Output:
+          valueFromParameter:
+            outputParameterKey: Output
+            producerSubtask: download-model
+    tasks:
+      download-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-download-model
+        inputs:
+          parameters:
+            download_enabled:
+              componentInputParameter: download_enabled
+            model_cache_mount:
+              componentInputParameter: model_cache_mount
+            model_cache_pvc:
+              componentInputParameter: model_cache_pvc
+            model_name:
+              componentInputParameter: model_name
+        taskInfo:
+          name: download-model
+  inputDefinitions:
+    parameters:
+      download_enabled:
+        defaultValue: true
+        description: If False, return the expected model directory without downloading.
+        isOptional: true
+        parameterType: BOOLEAN
+      model_cache_mount:
+        defaultValue: /mnt/models
+        description: Mount path for the model cache PVC.
+        isOptional: true
+        parameterType: STRING
+      model_cache_pvc:
+        description: Name of the PVC to store models (unused here, mounted via pipeline).
+        parameterType: STRING
+      model_name:
+        description: HuggingFace model ID (e.g. 'mistralai/Mistral-7B-Instruct-v0.3').
+        parameterType: STRING
+  outputDefinitions:
+    parameters:
+      Output:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.16.1
