@@ -9,7 +9,7 @@ _SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "shared")
 
 
 @dsl.component(
-    base_image="quay.io/opendatahub/odh-th-torch-cuda-py312:3.6-ea.2",
+    base_image="quay.io/opendatahub/odh-th-torch-cuda-py312:odh-3.6-ea.2",
     packages_to_install=["kfp==2.17.0", "kubernetes", "olot"],
     install_kfp_package=False,
     embedded_artifact_path=_SHARED_DIR,
