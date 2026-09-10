@@ -67,12 +67,11 @@ hidden-state paths.
 - **Owners**:
   - No Parent Owners: Yes
   - Approvers:
-    - briangallagher
     - efazal
-    - Fiona-Waters
-    - kramaranya
-    - MStokluska
-    - szaher
+    - hrathina
+    - jhajdics
+    - shchugh
+    - srpillai
 
 ## Additional Resources 📚
 
