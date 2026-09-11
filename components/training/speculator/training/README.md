@@ -48,6 +48,7 @@ Train a draft model from hidden states already stored on the PVC.
 | `pip_index_urls` | `Optional[str]` | `None` |  |
 | `training_envs` | `str` | `""` |  |
 | `training_runtime` | `str` | `speculator-model-opt-cuda` |  |
+| `training_job_timeout_seconds` | `int` | `7200` |  |
 | `persistent_pvc` | `str` | `""` |  |
 | `persistent_mount_path` | `str` | `/mnt/persistent` |  |
 | `output_model` | `dsl.Output[dsl.Model]` | `None` |  |

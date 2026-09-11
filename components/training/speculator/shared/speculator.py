@@ -183,10 +183,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         }
         speculator_type = values["speculator_type"].lower()
         if speculator_type not in types:
-            raise ValueError(
-                f"Unknown speculator_type {values['speculator_type']!r}; "
-                f"expected one of {sorted(types)}"
-            )
+            raise ValueError(f"Unknown speculator_type {values['speculator_type']!r}; expected one of {sorted(types)}")
         config_values = {
             "num_layers": values["training_num_layers"],
             "ttt_steps": values["training_ttt_steps"],
