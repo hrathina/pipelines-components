@@ -36,7 +36,6 @@ hidden-state paths.
 | `pip_index_urls` | `Optional[str]` | `None` |  |
 | `training_envs` | `str` | `""` |  |
 | `training_runtime` | `str` | `speculator-model-opt-cuda` |  |
-| `training_job_timeout_seconds` | `int` | `7200` |  |
 | `persistent_pvc` | `str` | `""` |  |
 | `persistent_mount_path` | `str` | `/mnt/persistent` |  |
 | `download_model` | `bool` | `False` |  |
@@ -68,11 +67,9 @@ hidden-state paths.
 - **Owners**:
   - No Parent Owners: Yes
   - Approvers:
+    - ChughShilpa
     - efazal
     - hrathina
-    - jhajdics
-    - shchugh
-    - srpillai
 
 ## Additional Resources 📚
 
