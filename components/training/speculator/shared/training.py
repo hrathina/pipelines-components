@@ -13,9 +13,14 @@ def select_runtime(client, log: logging.Logger, runtime_name: str):
     raise RuntimeError(f"Runtime '{runtime_name}' not found")
 
 
-def wait_for_training_job(client, job: str, log: logging.Logger) -> None:
+def wait_for_training_job(
+    client,
+    job: str,
+    log: logging.Logger,
+    completion_timeout_seconds: int = 7200,
+) -> None:
     """Wait for a TrainJob to complete and raise on failure."""
-    client.wait_for_job_status(name=job, status={"Running"}, timeout=900)
+    client.wait_for_job_status(name=job, status={"Running", "Complete"}, timeout=900)
     try:
         train_job = client.get_job(name=job)
     except Exception as exc:
@@ -33,7 +38,19 @@ def wait_for_training_job(client, job: str, log: logging.Logger) -> None:
                     log.warning("Log streaming failed: %s", exc)
                 else:
                     time.sleep(5)
-    client.wait_for_job_status(name=job, status={"Complete", "Failed"}, timeout=1800)
+    try:
+        client.wait_for_job_status(
+            name=job,
+            status={"Complete", "Failed"},
+            timeout=completion_timeout_seconds,
+        )
+    except TimeoutError:
+        log.error("TrainJob %s timed out; deleting the still-running job", job)
+        try:
+            client.delete_job(name=job)
+        except Exception as exc:
+            log.warning("Failed to delete timed-out TrainJob %s: %s", job, exc)
+        raise
     result = client.get_job(name=job)
     if getattr(result, "status", None) != "Complete":
         raise RuntimeError(f"Job ended with status: {getattr(result, 'status', None)}")

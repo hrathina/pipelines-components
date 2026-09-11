@@ -46,9 +46,12 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         "total_seq_len": 2048,
         "training_envs": "",
         "training_runtime": "speculator-model-opt-cuda",
+        "training_job_timeout_seconds": 7200,
     }
     for key, default in defaults.items():
         values.setdefault(key, default)
+    if not isinstance(values["training_job_timeout_seconds"], int) or values["training_job_timeout_seconds"] < 1:
+        raise ValueError("training_job_timeout_seconds must be a positive integer")
 
     def pvc_parts(uri: str) -> tuple[str | None, str]:
         if uri.startswith("pvc://"):
@@ -178,6 +181,12 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             "mtp": SpeculatorType.MTP,
             "peagle": SpeculatorType.PEAGLE,
         }
+        speculator_type = values["speculator_type"].lower()
+        if speculator_type not in types:
+            raise ValueError(
+                f"Unknown speculator_type {values['speculator_type']!r}; "
+                f"expected one of {sorted(types)}"
+            )
         config_values = {
             "num_layers": values["training_num_layers"],
             "ttt_steps": values["training_ttt_steps"],
@@ -205,7 +214,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         training_resources = {
             "nvidia.com/gpu": values["training_resource_gpu"],
             "memory": values["training_resource_memory"],
-            "cpu": int(values["training_resource_cpu"]),
+            "cpu": values["training_resource_cpu"],
         }
         vllm_resources = {
             "nvidia.com/gpu": values["vllm_resource_gpu"],
@@ -216,7 +225,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             "verifier_model": trainer_verifier_model,
             "mode": modes[mode],
             "output_dir": trainer_output_dir,
-            "speculator_type": types.get(values["speculator_type"].lower(), SpeculatorType.EAGLE3),
+            "speculator_type": types[speculator_type],
             "total_seq_len": values["total_seq_len"],
             "vllm_gpu_memory_utilization": values["vllm_gpu_memory_utilization"],
             "vllm_readiness_timeout_minutes": values["vllm_readiness_timeout_minutes"],
@@ -347,7 +356,12 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         else:
             options = None
         job = client.train(trainer=trainer, options=options, runtime=runtime)
-        wait_for_training_job(client, job, log)
+        wait_for_training_job(
+            client,
+            job,
+            log,
+            completion_timeout_seconds=values["training_job_timeout_seconds"],
+        )
     except Exception:
         log.error("Speculator %s failed", mode)
         raise

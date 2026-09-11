@@ -22,8 +22,8 @@ def persist_model(ckpt_dir: str, pvc_path: str, model_name: str, output_model, l
         raise RuntimeError(f"No model found in {ckpt_dir}")
     pvc_output = os.path.join(pvc_path, "final_model")
     if os.path.exists(pvc_output):
-        shutil.rmtree(pvc_output, ignore_errors=True)
-    shutil.copytree(latest, pvc_output, dirs_exist_ok=True)
+        shutil.rmtree(pvc_output)
+    shutil.copytree(latest, pvc_output)
     shutil.copytree(latest, output_model.path, dirs_exist_ok=True)
     output_model.name = f"{model_name}-checkpoint"
     output_model.metadata["model_name"] = model_name
