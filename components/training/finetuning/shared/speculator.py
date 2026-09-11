@@ -46,12 +46,9 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         "total_seq_len": 2048,
         "training_envs": "",
         "training_runtime": "speculator-model-opt-cuda",
-        "training_job_timeout_seconds": 7200,
     }
     for key, default in defaults.items():
         values.setdefault(key, default)
-    if not isinstance(values["training_job_timeout_seconds"], int) or values["training_job_timeout_seconds"] < 1:
-        raise ValueError("training_job_timeout_seconds must be a positive integer")
 
     def pvc_parts(uri: str) -> tuple[str | None, str]:
         if uri.startswith("pvc://"):
@@ -357,7 +354,6 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             client,
             job,
             log,
-            completion_timeout_seconds=values["training_job_timeout_seconds"],
         )
     except Exception:
         log.error("Speculator %s failed", mode)
@@ -372,9 +368,17 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             output.uri = hidden_states_dir
             output.metadata["pvc_path"] = hidden_states_dir
         return "data_only completed - hidden states saved"
-    model_dir = local_path(values["output_dir"])
+    model_dir = os.path.join(local_path(values["output_dir"]), "checkpoint_best")
     if values.get("output_model"):
-        persist_model(model_dir, pvc_path, values["verifier_model"], values["output_model"], log)
+        persist_model(
+            model_dir,
+            pvc_path,
+            values["verifier_model"],
+            values["output_model"],
+            log,
+            prefer_best=True,
+            strict_output=True,
+        )
     if values.get("output_metrics"):
         values["output_metrics"].log_metric("mode", mode)
         values["output_metrics"].log_metric("training_epochs", float(values["training_epochs"]))
