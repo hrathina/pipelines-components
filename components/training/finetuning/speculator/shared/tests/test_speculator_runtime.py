@@ -1,4 +1,4 @@
-"""Tests for the shared Speculator runtime."""
+"""Tests for the Speculator runtime."""
 
 import inspect
 

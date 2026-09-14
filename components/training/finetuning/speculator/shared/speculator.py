@@ -6,9 +6,9 @@ from typing import Any
 
 def run_speculator(mode: str, values: dict[str, Any]) -> str:
     """Run one fixed Speculator mode from a KFP launcher."""
-    from output import persist_model
-    from setup import configure_env, create_logger, init_k8s, setup_hf_token
-    from training import select_runtime, wait_for_training_job
+    from shared.output import persist_model
+    from shared.setup import configure_env, create_logger, init_k8s, setup_hf_token
+    from shared.training import select_runtime, wait_for_training_job
 
     log = create_logger(f"speculator_{mode}")
     pvc_path = values["pvc_path"]

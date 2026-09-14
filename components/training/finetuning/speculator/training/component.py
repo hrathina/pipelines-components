@@ -5,7 +5,7 @@ from typing import Optional
 
 from kfp import dsl
 
-_SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "shared")
+_SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
 
 
 @dsl.component(
@@ -68,6 +68,6 @@ def train_speculator_mode(
     kubernetes_config: dsl.TaskConfig = None,
 ) -> str:
     """Train a draft model from hidden states already stored on the PVC."""
-    from speculator import run_speculator
+    from speculator.shared.speculator import run_speculator
 
     return run_speculator("train_only", locals())
