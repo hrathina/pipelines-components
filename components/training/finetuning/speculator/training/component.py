@@ -5,11 +5,14 @@ from typing import Optional
 
 from kfp import dsl
 
-_SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
+_SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "shared")
 
 
 @dsl.component(
-    base_image="quay.io/opendatahub/odh-th-torch-cuda-py312:odh-3.6-ea.2",
+    base_image=(
+        "quay.io/opendatahub/odh-th-torch-cuda-py312@"
+        "sha256:9ad2d72ebe892dffd3554eeb81e2a47c9fcf0d97f89ed261d48f4e8bbc367b4b"
+    ),
     packages_to_install=["kfp==2.17.0", "kubernetes", "olot"],
     install_kfp_package=False,
     embedded_artifact_path=_SHARED_DIR,
@@ -68,6 +71,6 @@ def train_speculator_mode(
     kubernetes_config: dsl.TaskConfig = None,
 ) -> str:
     """Train a draft model from hidden states already stored on the PVC."""
-    from speculator.shared.speculator import run_speculator
+    from speculator import run_speculator
 
     return run_speculator("train_only", locals())

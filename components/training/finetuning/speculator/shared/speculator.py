@@ -6,9 +6,14 @@ from typing import Any
 
 def run_speculator(mode: str, values: dict[str, Any]) -> str:
     """Run one fixed Speculator mode from a KFP launcher."""
-    from shared.output import persist_model
-    from shared.setup import configure_env, create_logger, init_k8s, setup_hf_token
-    from shared.training import select_runtime, wait_for_training_job
+    try:
+        from output import persist_model
+        from setup import configure_env, create_logger, init_k8s, setup_hf_token
+        from training import select_runtime, wait_for_training_job
+    except ModuleNotFoundError:
+        from shared.output import persist_model
+        from shared.setup import configure_env, create_logger, init_k8s, setup_hf_token
+        from shared.training import select_runtime, wait_for_training_job
 
     log = create_logger(f"speculator_{mode}")
     pvc_path = values["pvc_path"]
@@ -166,7 +171,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         if api is None:
             raise RuntimeError("Kubernetes API not initialized")
         client = TrainerClient(KubernetesBackendConfig(client_configuration=api.configuration))
-        runtime = select_runtime(client, log, runtime_name=values["training_runtime"])
+        runtime = select_runtime(client, log, runtime_name=values["training_runtime"].strip())
         modes = {
             "data_only": SpeculatorMode.DATA_ONLY,
             "train_only": SpeculatorMode.TRAIN_ONLY,
@@ -372,7 +377,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
     if values.get("output_model"):
         persist_model(
             model_dir,
-            pvc_path,
+            persistent_mount_path if persistent_pvc else pvc_path,
             values["verifier_model"],
             values["output_model"],
             log,
