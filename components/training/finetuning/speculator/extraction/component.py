@@ -5,7 +5,7 @@ from typing import Optional
 
 from kfp import dsl
 
-_SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
+_SHARED_DIR = os.path.join(os.path.dirname(__file__), "..", "shared")
 
 
 @dsl.component(
@@ -62,6 +62,6 @@ def extract_speculator(
     Managed mode uses the in-job vLLM sidecar; providing ``vllm_endpoint`` uses an
     external vLLM service and requires matching shared model and hidden-state paths.
     """
-    from speculator.shared.speculator import run_speculator
+    from speculator import run_speculator
 
     return run_speculator("data_only", locals())
