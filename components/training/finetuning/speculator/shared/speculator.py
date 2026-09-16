@@ -249,7 +249,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
                     config=config,
                 )
             else:
-                params["vllm_resources"] = vllm_resources
+                params.update(vllm_resources=vllm_resources, config=config)
         elif mode == "online":
             params.update(
                 dataset_name=values["dataset_name"],
@@ -373,7 +373,9 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             output.uri = hidden_states_dir
             output.metadata["pvc_path"] = hidden_states_dir
         return "data_only completed - hidden states saved"
-    model_dir = os.path.join(local_path(values["output_dir"]), "checkpoint_best")
+    output_root = local_path(values["output_dir"])
+    checkpoint_best = os.path.join(output_root, "checkpoint_best")
+    model_dir = os.path.dirname(checkpoint_best)
     if values.get("output_model"):
         persist_model(
             model_dir,
