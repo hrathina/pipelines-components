@@ -46,7 +46,7 @@ def evaluate_speculator(
         output_results: JSON artifact containing raw timing and acceptance results.
         verifier_model: Local or PVC-relative path to the verifier model.
         draft_model_path: Local path to the trained draft model on the mounted PVC.
-        evaluation_dataset_uri: Local or PVC-relative path to the evaluation JSONL.
+        evaluation_dataset_uri: Local path or PVC URI (``pvc://<claim>/<path>``) to the evaluation JSONL.
         evaluation_max_samples: Maximum number of prompts to evaluate.
         evaluation_max_tokens: Maximum completion tokens per prompt.
         evaluation_temperature: Sampling temperature sent to both servers.
@@ -81,7 +81,7 @@ def evaluate_speculator(
         draft_path = os.path.join(evaluation_model_mount_path, draft_path)
     dataset_path = evaluation_dataset_uri
     if dataset_path.startswith("pvc://"):
-        dataset_path = dataset_path.removeprefix("pvc://")
+        dataset_path = dataset_path.removeprefix("pvc://").split("/", 1)[-1]
     if not os.path.isabs(dataset_path):
         dataset_path = os.path.join(evaluation_dataset_mount_path, dataset_path)
     dataset_path = Path(dataset_path)

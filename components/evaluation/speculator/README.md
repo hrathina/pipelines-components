@@ -17,7 +17,7 @@ or a string value on each line. At most ``evaluation_max_samples`` records are s
 | `output_results` | `dsl.Output[dsl.Artifact]` | `None` | JSON artifact containing raw timing and acceptance results. |
 | `verifier_model` | `str` | `None` | Local or PVC-relative path to the verifier model. |
 | `draft_model_path` | `str` | `None` | Local path to the trained draft model on the mounted PVC. |
-| `evaluation_dataset_uri` | `str` | `None` | Local or PVC-relative path to the evaluation JSONL. |
+| `evaluation_dataset_uri` | `str` | `None` | Local path or PVC URI (``pvc://<claim>/<path>``) to the evaluation JSONL. |
 | `evaluation_speculator_type` | `str` | `None` | Speculator method used by the draft checkpoint. |
 | `evaluation_max_samples` | `int` | `80` | Maximum number of prompts to evaluate. |
 | `evaluation_max_tokens` | `int` | `256` | Maximum completion tokens per prompt. |

@@ -47,3 +47,9 @@ def test_component_documents_metrics_and_server_workflow():
     assert "vllm" in docstring
     assert "messages" in docstring
     assert "evaluation_max_samples" in docstring
+
+
+def test_component_strips_pvc_claim_from_dataset_uri():
+    """Dataset PVC URIs use the path after the PVC claim name."""
+    source = inspect.getsource(evaluate_speculator.python_func)
+    assert '.removeprefix("pvc://").split("/", 1)[-1]' in source
