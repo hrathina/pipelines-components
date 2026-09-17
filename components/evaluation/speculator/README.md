@@ -30,6 +30,7 @@ or a string value on each line. At most ``evaluation_max_samples`` records are s
 | `evaluation_sample_seed` | `int` | `42` | Seed used for deterministic dataset sampling. |
 | `evaluation_model_mount_path` | `str` | `/mnt/persistent` | Local mount prefix for a relative verifier path. |
 | `evaluation_dataset_mount_path` | `str` | `/mnt/persistent` | Local mount prefix for a relative dataset path. |
+| `evaluation_max_failure_rate` | `float` | `0.1` | Maximum allowed request failure fraction. |
 
 ## Outputs 📤
 

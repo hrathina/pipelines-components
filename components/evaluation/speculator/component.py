@@ -29,6 +29,7 @@ def evaluate_speculator(
     evaluation_sample_seed: int = 42,
     evaluation_model_mount_path: str = "/mnt/persistent",
     evaluation_dataset_mount_path: str = "/mnt/persistent",
+    evaluation_max_failure_rate: float = 0.1,
 ) -> None:
     """Evaluate a draft model with verifier-only and speculative vLLM servers.
 
@@ -59,6 +60,7 @@ def evaluate_speculator(
         evaluation_sample_seed: Seed used for deterministic dataset sampling.
         evaluation_model_mount_path: Local mount prefix for a relative verifier path.
         evaluation_dataset_mount_path: Local mount prefix for a relative dataset path.
+        evaluation_max_failure_rate: Maximum allowed request failure fraction.
     """
     import json
     import os
@@ -115,6 +117,10 @@ def evaluate_speculator(
         raise ValueError("The evaluation dataset contains no prompts")
     if evaluation_max_samples <= 0:
         raise ValueError("evaluation_max_samples must be greater than zero")
+    if evaluation_max_tokens <= 0:
+        raise ValueError("evaluation_max_tokens must be greater than zero")
+    if not 0 <= evaluation_max_failure_rate < 1:
+        raise ValueError("evaluation_max_failure_rate must be in the range [0, 1)")
     if len(prompts) > evaluation_max_samples:
         prompts = random.Random(evaluation_sample_seed).sample(prompts, evaluation_max_samples)
 
@@ -178,24 +184,40 @@ def evaluate_speculator(
             time.sleep(2)
         raise TimeoutError(f"vLLM did not become ready within {evaluation_startup_timeout_seconds} seconds")
 
-    def run_requests() -> tuple[float, int]:
-        started = time.perf_counter()
+    def run_requests(prompt_indices: list[int]) -> tuple[float, int, set[int], dict[int, float]]:
         output_tokens = 0
-        for prompt in prompts:
-            response = requests.post(
-                f"{endpoint}/v1/completions",
-                json={
-                    "model": verifier_path,
-                    "prompt": prompt,
-                    "max_tokens": evaluation_max_tokens,
-                    "temperature": evaluation_temperature,
-                },
-                timeout=evaluation_request_timeout_seconds,
-            )
-            response.raise_for_status()
-            usage = response.json().get("usage", {})
+        successful_indices = set()
+        request_durations = {}
+        failures = 0
+        for index in prompt_indices:
+            started = time.perf_counter()
+            try:
+                response = requests.post(
+                    f"{endpoint}/v1/completions",
+                    json={
+                        "model": verifier_path,
+                        "prompt": prompts[index],
+                        "max_tokens": evaluation_max_tokens,
+                        "temperature": evaluation_temperature,
+                    },
+                    timeout=evaluation_request_timeout_seconds,
+                )
+                response.raise_for_status()
+                usage = response.json().get("usage", {})
+            except requests.RequestException as exc:
+                failures += 1
+                print(f"Evaluation request {index} failed: {exc}", flush=True)
+                continue
+            successful_indices.add(index)
+            request_durations[index] = time.perf_counter() - started
             output_tokens += int(usage.get("completion_tokens", 0))
-        return time.perf_counter() - started, output_tokens
+        attempted = len(prompt_indices)
+        if attempted and failures / attempted > evaluation_max_failure_rate:
+            raise RuntimeError(
+                f"Evaluation failure rate {failures / attempted:.1%} exceeded "
+                f"the allowed {evaluation_max_failure_rate:.1%}"
+            )
+        return sum(request_durations.values()), output_tokens, successful_indices, request_durations
 
     def read_speculative_metrics() -> dict[str, float]:
         response = requests.get(f"{endpoint}/metrics", timeout=30)
@@ -204,15 +226,30 @@ def evaluate_speculator(
         for line in response.text.splitlines():
             if line.startswith("#") or "vllm:spec_decode" not in line:
                 continue
-            metric, _, value = line.partition(" ")
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            metric, value_str = parts[0], parts[1]
             metric = metric.split("{", 1)[0].removesuffix("_total")
             try:
-                counters[metric] = counters.get(metric, 0.0) + float(value)
+                counters[metric] = counters.get(metric, 0.0) + float(value_str)
             except ValueError:
                 continue
         draft_tokens = counters.get("vllm:spec_decode_num_draft_tokens", 0.0)
         accepted_tokens = counters.get("vllm:spec_decode_num_accepted_tokens", 0.0)
         drafts = counters.get("vllm:spec_decode_num_drafts", 0.0)
+        required_counters = (
+            "vllm:spec_decode_num_drafts",
+            "vllm:spec_decode_num_draft_tokens",
+            "vllm:spec_decode_num_accepted_tokens",
+        )
+        missing_counters = [name for name in required_counters if name not in counters]
+        if missing_counters:
+            preview = response.text[:1000].replace("\n", "\\n")
+            raise RuntimeError(
+                f"vLLM speculative-decoding counters are missing: {missing_counters}. "
+                f"Raw /metrics response preview: {preview!r}"
+            )
         return {
             "num_drafts": drafts,
             "num_draft_tokens": draft_tokens,
@@ -223,23 +260,41 @@ def evaluate_speculator(
 
     try:
         start_server(speculative=False)
-        baseline_seconds, baseline_tokens = run_requests()
+        baseline_seconds, baseline_tokens, baseline_successful, baseline_durations = run_requests(
+            list(range(len(prompts)))
+        )
         stop_server()
 
         start_server(speculative=True)
-        speculative_seconds, speculative_tokens = run_requests()
+        speculative_seconds, speculative_tokens, speculative_successful, speculative_durations = run_requests(
+            sorted(baseline_successful)
+        )
         spec_metrics = read_speculative_metrics()
     finally:
         stop_server()
 
+    comparable_indices = baseline_successful & speculative_successful
+    if not comparable_indices:
+        raise RuntimeError("No prompts completed successfully in both evaluation runs")
+    baseline_seconds = sum(baseline_durations[index] for index in comparable_indices)
+    speculative_seconds = sum(speculative_durations[index] for index in comparable_indices)
+    speedup = baseline_seconds / speculative_seconds if speculative_seconds > 0 else 0.0
+    if speedup > 100:
+        print(
+            f"WARNING: calculated speedup {speedup:.2f}x exceeds the sanity bound; "
+            "check evaluation timings and request configuration",
+            flush=True,
+        )
     results = {
         **spec_metrics,
         "baseline_seconds": baseline_seconds,
         "speculative_seconds": speculative_seconds,
         "baseline_output_tokens": baseline_tokens,
         "speculative_output_tokens": speculative_tokens,
-        "speedup": baseline_seconds / speculative_seconds if speculative_seconds else 0.0,
-        "requests": len(prompts),
+        "speedup": speedup,
+        "requests": len(comparable_indices),
+        "baseline_failures": len(prompts) - len(baseline_successful),
+        "speculative_failures": len(baseline_successful) - len(speculative_successful),
     }
     with Path(output_results.path).open("w") as results_file:
         json.dump(results, results_file, indent=2)
