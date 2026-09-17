@@ -99,6 +99,10 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             )
         return os.path.join(pvc_path, path)
 
+    if values.get("vllm_endpoint") == "":
+        raise ValueError(
+            "vllm_endpoint must be omitted/None for managed vLLM or set to a non-empty URL for external vLLM"
+        )
     for key in (
         "dataset_name",
         "hidden_states_path",
@@ -121,6 +125,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         if values.get(key) == 0:
             values[key] = None
 
+    raw_verifier_model = values["verifier_model"]
     if mode == "data_only" and values.get("vllm_source") == "remote":
         values["verifier_model"] = values.get("verifier_model_pvc") or values["verifier_model"]
     elif mode in ("train_only", "online") and values.get("verifier_model_pvc"):
@@ -142,7 +147,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
     trainer_hidden_states_path = trainer_path(values.get("hidden_states_path"))
     trainer_training_data_path = trainer_path(values.get("training_data_path"))
     if external:
-        if not trainer_hidden_states_path or not trainer_verifier_model.startswith("pvc://"):
+        if not raw_verifier_model.startswith("pvc://") or not trainer_hidden_states_path:
             raise ValueError("External vLLM requires a pvc:// verifier_model and hidden_states_path")
         if not values.get("target_layer_ids"):
             raise ValueError("target_layer_ids is required with an external vLLM endpoint")
@@ -249,7 +254,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
                     config=config,
                 )
             else:
-                params["vllm_resources"] = vllm_resources
+                params.update(vllm_resources=vllm_resources, config=config)
         elif mode == "online":
             params.update(
                 dataset_name=values["dataset_name"],
@@ -310,14 +315,31 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
                 claim, _ = pvc_parts(storage_uri or "")
                 if claim:
                     storage_claims.add(claim)
-            duplicate_volume_names = {
-                volume.get("name")
-                for volume in volumes
-                if volume.get("persistentVolumeClaim", {}).get("claimName") in storage_claims
+            duplicate_mount_pairs = {(claim, persistent_mount_path) for claim in storage_claims}
+            volume_claims = {
+                volume.get("name"): volume.get("persistentVolumeClaim", {}).get("claimName") for volume in volumes
             }
-            if duplicate_volume_names:
-                mounts = [mount for mount in mounts if mount.get("name") not in duplicate_volume_names]
-                volumes = [volume for volume in volumes if volume.get("name") not in duplicate_volume_names]
+            removed_mounts = [
+                mount
+                for mount in mounts
+                if (volume_claims.get(mount.get("name")), mount.get("mountPath")) in duplicate_mount_pairs
+            ]
+            if removed_mounts:
+                log.info(
+                    "Removing duplicate PVC mounts: %s",
+                    [
+                        (volume_claims.get(mount.get("name")), mount.get("mountPath"), mount.get("name"))
+                        for mount in removed_mounts
+                    ],
+                )
+                mounts = [mount for mount in mounts if mount not in removed_mounts]
+                remaining_mount_names = {mount.get("name") for mount in mounts}
+                removed_volume_names = {
+                    mount.get("name") for mount in removed_mounts if mount.get("name") not in remaining_mount_names
+                }
+                if removed_volume_names:
+                    log.info("Removing duplicate PVC volumes: %s", sorted(removed_volume_names))
+                    volumes = [volume for volume in volumes if volume.get("name") not in removed_volume_names]
             workspace_mount = next((x for x in mounts if x.get("mountPath") == pvc_path), None)
             if workspace_mount:
                 # KFP already mounts the workspace in the TrainJob pod. Do not
@@ -361,22 +383,33 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             log,
         )
     except Exception:
-        log.error("Speculator %s failed", mode)
+        log.exception("Speculator %s failed", mode)
         raise
 
     if mode == "data_only":
         hidden_states_dir = local_path(
             values["hidden_states_path"] if external else values["output_dir"] + "/hidden_states"
         )
+        if not os.path.isdir(hidden_states_dir):
+            raise RuntimeError(
+                f"Speculator data extraction completed without creating hidden states at "
+                f"{hidden_states_dir!r}. Check the TrainJob logs for the extraction failure."
+            )
         output = values.get("output_hidden_states")
         if output:
             output.uri = hidden_states_dir
             output.metadata["pvc_path"] = hidden_states_dir
+        else:
+            log.warning(
+                "Hidden states were saved to PVC path %s; no KFP output artifact is wired for this task",
+                hidden_states_dir,
+            )
         return "data_only completed - hidden states saved"
-    model_dir = os.path.join(local_path(values["output_dir"]), "checkpoint_best")
+    output_root = local_path(values["output_dir"])
+    # persist_model selects "checkpoint_best" when it exists, then falls back to the latest checkpoint.
     if values.get("output_model"):
         persist_model(
-            model_dir,
+            output_root,
             persistent_mount_path if persistent_pvc else pvc_path,
             values["verifier_model"],
             values["output_model"],
@@ -385,7 +418,6 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             strict_output=True,
         )
     if values.get("output_metrics"):
-        values["output_metrics"].log_metric("mode", mode)
         values["output_metrics"].log_metric("training_epochs", float(values["training_epochs"]))
         values["output_metrics"].log_metric("learning_rate", float(values["training_lr"]))
     return f"{mode} completed - model trained"
