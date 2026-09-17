@@ -99,6 +99,10 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             )
         return os.path.join(pvc_path, path)
 
+    if values.get("vllm_endpoint") == "":
+        raise ValueError(
+            "vllm_endpoint must be omitted/None for managed vLLM or set to a non-empty URL for external vLLM"
+        )
     for key in (
         "dataset_name",
         "hidden_states_path",
@@ -121,6 +125,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         if values.get(key) == 0:
             values[key] = None
 
+    raw_verifier_model = values["verifier_model"]
     if mode == "data_only" and values.get("vllm_source") == "remote":
         values["verifier_model"] = values.get("verifier_model_pvc") or values["verifier_model"]
     elif mode in ("train_only", "online") and values.get("verifier_model_pvc"):
@@ -142,7 +147,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
     trainer_hidden_states_path = trainer_path(values.get("hidden_states_path"))
     trainer_training_data_path = trainer_path(values.get("training_data_path"))
     if external:
-        if not trainer_hidden_states_path or not trainer_verifier_model.startswith("pvc://"):
+        if not raw_verifier_model.startswith("pvc://") or not trainer_hidden_states_path:
             raise ValueError("External vLLM requires a pvc:// verifier_model and hidden_states_path")
         if not values.get("target_layer_ids"):
             raise ValueError("target_layer_ids is required with an external vLLM endpoint")
@@ -368,17 +373,26 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
         hidden_states_dir = local_path(
             values["hidden_states_path"] if external else values["output_dir"] + "/hidden_states"
         )
+        if not os.path.isdir(hidden_states_dir):
+            raise RuntimeError(
+                f"Speculator data extraction completed without creating hidden states at "
+                f"{hidden_states_dir!r}. Check the TrainJob logs for the extraction failure."
+            )
         output = values.get("output_hidden_states")
         if output:
             output.uri = hidden_states_dir
             output.metadata["pvc_path"] = hidden_states_dir
+        else:
+            log.warning(
+                "Hidden states were saved to PVC path %s; no KFP output artifact is wired for this task",
+                hidden_states_dir,
+            )
         return "data_only completed - hidden states saved"
     output_root = local_path(values["output_dir"])
-    checkpoint_best = os.path.join(output_root, "checkpoint_best")
-    model_dir = os.path.dirname(checkpoint_best)
+    # persist_model selects "checkpoint_best" when it exists, then falls back to the latest checkpoint.
     if values.get("output_model"):
         persist_model(
-            model_dir,
+            output_root,
             persistent_mount_path if persistent_pvc else pvc_path,
             values["verifier_model"],
             values["output_model"],
