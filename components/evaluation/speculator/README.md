@@ -46,7 +46,7 @@ or a string value on each line. At most ``evaluation_max_samples`` records are s
   - Kubeflow:
     - Name: Pipelines, Version: >=2.15.2
   - External Services:
-    - Name: vLLM, Version: >=0.8.0
+    - Name: vLLM, Version: >=0.9.0
     - Name: Speculators, Version: >=0.7.1
 - **Tags**:
   - evaluation
