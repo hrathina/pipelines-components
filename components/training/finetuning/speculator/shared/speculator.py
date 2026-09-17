@@ -315,13 +315,9 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
                 claim, _ = pvc_parts(storage_uri or "")
                 if claim:
                     storage_claims.add(claim)
-            duplicate_mount_pairs = {
-                (claim, persistent_mount_path)
-                for claim in storage_claims
-            }
+            duplicate_mount_pairs = {(claim, persistent_mount_path) for claim in storage_claims}
             volume_claims = {
-                volume.get("name"): volume.get("persistentVolumeClaim", {}).get("claimName")
-                for volume in volumes
+                volume.get("name"): volume.get("persistentVolumeClaim", {}).get("claimName") for volume in volumes
             }
             removed_mounts = [
                 mount

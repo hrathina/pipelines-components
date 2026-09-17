@@ -31,7 +31,7 @@ class TestSpeculatorRuntime:
     def test_runtime_warns_without_hidden_states_artifact(self):
         """Verify PVC-only hidden-state output is explicitly reported."""
         source = inspect.getsource(speculator.run_speculator)
-        assert 'log.warning(' in source
+        assert "log.warning(" in source
         assert "no KFP output artifact is wired" in source
 
     def test_runtime_rejects_empty_vllm_endpoint(self):
@@ -44,4 +44,4 @@ class TestSpeculatorRuntime:
         """Verify external vLLM validation checks the original verifier input."""
         source = inspect.getsource(speculator.run_speculator)
         assert 'raw_verifier_model = values["verifier_model"]' in source
-        assert "not raw_verifier_model.startswith(\"pvc://\")" in source
+        assert 'not raw_verifier_model.startswith("pvc://")' in source
