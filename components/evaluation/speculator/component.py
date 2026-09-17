@@ -65,12 +65,16 @@ def evaluate_speculator(
     import json
     import os
     import random
+    import shutil
     import signal
     import subprocess
     import time
     from pathlib import Path
 
     import requests
+
+    if shutil.which("vllm") is None:
+        raise RuntimeError("vllm binary not found - ensure vLLM is installed in the base image")
 
     os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
     verifier_path = verifier_model
@@ -132,7 +136,10 @@ def evaluate_speculator(
         if process is None:
             return
         if process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
             try:
                 process.wait(timeout=30)
             except subprocess.TimeoutExpired:

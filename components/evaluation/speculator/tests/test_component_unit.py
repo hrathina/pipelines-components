@@ -48,6 +48,13 @@ def test_component_validates_evaluation_bounds():
     assert "sanity bound" in source
 
 
+def test_component_checks_vllm_binary():
+    """The evaluator reports a clear error when vLLM is unavailable."""
+    source = inspect.getsource(evaluate_speculator.python_func)
+    assert 'shutil.which("vllm")' in source
+    assert "vllm binary not found" in source
+
+
 def test_component_documents_metrics_and_server_workflow():
     """The component documents its vLLM metrics and execution workflow."""
     docstring = evaluate_speculator.python_func.__doc__.lower()
