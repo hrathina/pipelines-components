@@ -315,14 +315,35 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
                 claim, _ = pvc_parts(storage_uri or "")
                 if claim:
                     storage_claims.add(claim)
-            duplicate_volume_names = {
-                volume.get("name")
-                for volume in volumes
-                if volume.get("persistentVolumeClaim", {}).get("claimName") in storage_claims
+            duplicate_mount_pairs = {
+                (claim, persistent_mount_path)
+                for claim in storage_claims
             }
-            if duplicate_volume_names:
-                mounts = [mount for mount in mounts if mount.get("name") not in duplicate_volume_names]
-                volumes = [volume for volume in volumes if volume.get("name") not in duplicate_volume_names]
+            volume_claims = {
+                volume.get("name"): volume.get("persistentVolumeClaim", {}).get("claimName")
+                for volume in volumes
+            }
+            removed_mounts = [
+                mount
+                for mount in mounts
+                if (volume_claims.get(mount.get("name")), mount.get("mountPath")) in duplicate_mount_pairs
+            ]
+            if removed_mounts:
+                log.info(
+                    "Removing duplicate PVC mounts: %s",
+                    [
+                        (volume_claims.get(mount.get("name")), mount.get("mountPath"), mount.get("name"))
+                        for mount in removed_mounts
+                    ],
+                )
+                mounts = [mount for mount in mounts if mount not in removed_mounts]
+                remaining_mount_names = {mount.get("name") for mount in mounts}
+                removed_volume_names = {
+                    mount.get("name") for mount in removed_mounts if mount.get("name") not in remaining_mount_names
+                }
+                if removed_volume_names:
+                    log.info("Removing duplicate PVC volumes: %s", sorted(removed_volume_names))
+                    volumes = [volume for volume in volumes if volume.get("name") not in removed_volume_names]
             workspace_mount = next((x for x in mounts if x.get("mountPath") == pvc_path), None)
             if workspace_mount:
                 # KFP already mounts the workspace in the TrainJob pod. Do not
@@ -366,7 +387,7 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             log,
         )
     except Exception:
-        log.error("Speculator %s failed", mode)
+        log.exception("Speculator %s failed", mode)
         raise
 
     if mode == "data_only":
@@ -401,7 +422,6 @@ def run_speculator(mode: str, values: dict[str, Any]) -> str:
             strict_output=True,
         )
     if values.get("output_metrics"):
-        values["output_metrics"].log_metric("mode", mode)
         values["output_metrics"].log_metric("training_epochs", float(values["training_epochs"]))
         values["output_metrics"].log_metric("learning_rate", float(values["training_lr"]))
     return f"{mode} completed - model trained"

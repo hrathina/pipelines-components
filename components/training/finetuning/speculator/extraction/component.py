@@ -30,6 +30,10 @@ def extract_speculator(
     output_dir: str,
     pvc_path: str,
     dataset_name: str,
+    verifier_model_pvc: Optional[str] = None,
+    vllm_source: str = "managed",
+    dataset_download_enabled: bool = False,
+    downloaded_dataset_uri: Optional[str] = None,
     hidden_states_path: Optional[str] = None,
     vllm_endpoint: Optional[str] = None,
     total_seq_len: int = 2048,
@@ -63,5 +67,14 @@ def extract_speculator(
     external vLLM service and requires matching shared model and hidden-state paths.
     """
     from speculator import run_speculator
+
+    if vllm_source == "remote":
+        verifier_model = verifier_model_pvc or verifier_model
+    if not vllm_endpoint:
+        vllm_endpoint = None
+    if dataset_download_enabled:
+        if not downloaded_dataset_uri:
+            raise ValueError("downloaded_dataset_uri is required when dataset download is enabled")
+        dataset_name = downloaded_dataset_uri
 
     return run_speculator("data_only", locals())

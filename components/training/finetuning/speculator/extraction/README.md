@@ -17,6 +17,10 @@ hidden-state paths.
 | `output_dir` | `str` | `None` |  |
 | `pvc_path` | `str` | `None` |  |
 | `dataset_name` | `str` | `None` |  |
+| `verifier_model_pvc` | `Optional[str]` | `None` |  |
+| `vllm_source` | `str` | `managed` |  |
+| `dataset_download_enabled` | `bool` | `False` |  |
+| `downloaded_dataset_uri` | `Optional[str]` | `None` |  |
 | `hidden_states_path` | `Optional[str]` | `None` |  |
 | `vllm_endpoint` | `Optional[str]` | `None` |  |
 | `total_seq_len` | `int` | `2048` |  |
