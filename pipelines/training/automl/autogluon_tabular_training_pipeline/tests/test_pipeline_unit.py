@@ -14,7 +14,6 @@ from ..pipeline import autogluon_tabular_training_pipeline
 # Root DAG task IDs from ``root.dag.tasks`` (fresh compile). Update when the graph changes.
 _EXPECTED_ROOT_DAG_TASK_IDS = (
     "condition-branches-1",
-    "automl-data-loader",
     "publish-component-stage-map",
 )
 
@@ -42,6 +41,19 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
+    def test_pipeline_declares_32_gib_shared_workspace(self):
+        """All preset branches share the 32 GiB PVC required by quality."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+        try:
+            compiler.Compiler().compile(
+                pipeline_func=autogluon_tabular_training_pipeline,
+                package_path=tmp_path,
+            )
+            assert "size: 32Gi" in Path(tmp_path).read_text(encoding="utf-8")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
     def test_pipeline_signature(self):
         """Test that the pipeline has the expected parameters."""
         # KFP pipelines expose parameters via component_spec.inputs, not inspect.signature
@@ -55,6 +67,8 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
             "positive_class",
             "preset",
             "eval_metric",
+            "test_data_bucket_name",
+            "test_data_file_key",
         }
         inputs = autogluon_tabular_training_pipeline.component_spec.inputs
         params = set(inputs.keys())
@@ -62,6 +76,8 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
         assert inputs["top_n"].default == 3
         assert inputs["preset"].default == "speed"
         assert inputs["eval_metric"].default == ""
+        assert inputs["test_data_bucket_name"].default == ""
+        assert inputs["test_data_file_key"].default == ""
 
     def test_compiled_pipeline_has_expected_inputs(self):
         """Test that the compiled pipeline YAML contains expected pipeline inputs."""
@@ -84,6 +100,8 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
                 "positive_class",
                 "preset",
                 "eval_metric",
+                "test_data_bucket_name",
+                "test_data_file_key",
             ):
                 assert name in content, f"Expected pipeline input '{name}' in compiled YAML"
         except Exception as e:
@@ -172,8 +190,8 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
         assert "componentInputParameter: preset" in content
         assert "condition-branches-1" in content
 
-    def test_compiled_pipeline_declares_speed_and_balanced_resource_tiers(self):
-        """Speed and balanced preset branches request different training CPU/memory."""
+    def test_compiled_pipeline_declares_all_preset_resource_tiers(self):
+        """Speed, balanced, and large-tabular preset branches request distinct resources."""
         from kfp_components.utils.pipeline_task_resources import (
             assert_executor_resources,
             compile_executor_resources,
@@ -187,10 +205,31 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
             {
                 "autogluon-models-training": AUTOML_TABULAR_EXECUTOR_RESOURCES["autogluon-models-training"],
                 "autogluon-models-training-2": AUTOML_TABULAR_EXECUTOR_RESOURCES["autogluon-models-training-2"],
+                "autogluon-models-training-3": AUTOML_TABULAR_EXECUTOR_RESOURCES["autogluon-models-training-3"],
             },
             pipeline_name="autogluon_tabular_training_pipeline (training tiers only)",
             allow_extra=True,
         )
+
+    def test_compiled_pipeline_wires_mlflow_inputs_to_training(self):
+        """MLflow inputs are forwarded into the training task.
+
+        The training task now logs to MLflow; the standalone mlflow-logger step no longer exists.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+        try:
+            compiler.Compiler().compile(
+                pipeline_func=autogluon_tabular_training_pipeline,
+                package_path=tmp_path,
+            )
+            content = Path(tmp_path).read_text(encoding="utf-8")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+        assert "automl-mlflow-logger" not in content
+        assert "exec-autogluon-models-training:" in content
+        assert "exec-autogluon-models-training-2:" in content
 
     def test_compiled_pipeline_data_loader_declares_task_type_and_label(self):
         """Tabular data loader component exposes task_type and label_column inputs."""
@@ -209,3 +248,41 @@ class TestAutogluonTabularTrainingPipelineUnitTests:
         assert "task_type:" in content
         assert "label_column:" in content
         assert "defaultValue: regression" in content
+
+    def test_compiled_pipeline_wires_test_data_params_to_data_loader(self):
+        """Test that pipeline wires test_data_bucket_name and test_data_file_key to data loader."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+        try:
+            compiler.Compiler().compile(
+                pipeline_func=autogluon_tabular_training_pipeline,
+                package_path=tmp_path,
+            )
+            content = Path(tmp_path).read_text(encoding="utf-8")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+        # Verify test data parameters are passed to data loader
+        assert "test_data_bucket_name:" in content
+        assert "test_data_file_key:" in content
+        assert "componentInputParameter: test_data_bucket_name" in content
+        assert "componentInputParameter: test_data_file_key" in content
+
+    def test_compiled_pipeline_uses_conditional_train_secret_mounts(self):
+        """Each conditional loader mounts the shared train secret."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+        try:
+            compiler.Compiler().compile(
+                pipeline_func=autogluon_tabular_training_pipeline,
+                package_path=tmp_path,
+            )
+            content = Path(tmp_path).read_text(encoding="utf-8")
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+        assert "condition-1" not in content
+        assert "TEST_DATA_AWS_ACCESS_KEY_ID" not in content
+        assert content.count("envVar: AWS_ACCESS_KEY_ID") == 3
+        assert "optional: true" in content
+        assert "pipelinechannel--train_data_secret_name" in content

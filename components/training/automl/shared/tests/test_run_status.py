@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from kfp_components.components.training.automl.shared.run_status import (
     COMPONENT_DATA_LOADER,
     COMPONENT_MODELS_TRAINING,
@@ -29,6 +30,7 @@ from kfp_components.components.training.automl.shared.run_status import (
     resolve_templates_dir,
     run_status_file_path,
     validate_component_stages,
+    validate_component_status_against_manifest,
 )
 
 
@@ -61,6 +63,9 @@ def test_tabular_pipeline_manifest_covers_all_components():
         catalog = load_component_stage_catalog(component, pipeline_id=PIPELINE_TABULAR_TRAINING)
         assert catalog["id"] == component
         assert len(catalog["stages"]) >= 1
+    # The training component now owns MLflow logging (the standalone logger step was removed).
+    training_catalog = load_component_stage_catalog(COMPONENT_MODELS_TRAINING, pipeline_id=PIPELINE_TABULAR_TRAINING)
+    assert "log_mlflow_results" in {stage["id"] for stage in training_catalog["stages"]}
 
 
 def test_timeseries_pipeline_manifest_covers_all_components():
@@ -72,6 +77,11 @@ def test_timeseries_pipeline_manifest_covers_all_components():
         COMPONENT_TIMESERIES_DATA_LOADER,
         COMPONENT_TIMESERIES_MODELS_TRAINING,
     ]
+    # The training component now owns MLflow logging (the standalone logger step was removed).
+    training_catalog = load_component_stage_catalog(
+        COMPONENT_TIMESERIES_MODELS_TRAINING, pipeline_id=PIPELINE_TIMESERIES_TRAINING
+    )
+    assert "log_mlflow_results" in {stage["id"] for stage in training_catalog["stages"]}
 
 
 def test_timeseries_model_selection_steps_match_tabular():
@@ -257,6 +267,45 @@ def test_publish_run_status_artifact(tmp_path):
     doc = publish_run_status_artifact(artifact_dir, ws)
     assert doc["kfp_run_id"] == "run-1"
     assert (Path(artifact_dir) / RUN_STATUS_ARTIFACT_FILENAME).exists()
+
+
+def test_validate_component_status_against_manifest_rejects_unknown_stage():
+    """component_status stage ids must match the pipeline manifest."""
+    payload = {
+        "component_id": COMPONENT_DATA_LOADER,
+        "started_at": "2026-01-01T00:00:00Z",
+        "completed_at": "2026-01-01T00:01:00Z",
+        "metadata": {"display_name": "Data Loader Status"},
+        "stages": [
+            {"id": "prepare_data", "status": {"state": "completed"}},
+            {"id": "nonexistent_stage", "status": {"state": "completed"}},
+        ],
+    }
+    with pytest.raises(ValueError, match="stages not in manifest"):
+        validate_component_status_against_manifest(payload, pipeline_id=PIPELINE_TABULAR_TRAINING)
+
+
+def test_validate_component_status_against_manifest_accepts_loader_payload():
+    """Loader component_status with manifest stage ids passes validation."""
+    payload = {
+        "component_id": COMPONENT_DATA_LOADER,
+        "started_at": "2026-01-01T00:00:00Z",
+        "completed_at": "2026-01-01T00:01:00Z",
+        "metadata": {"display_name": "Data Loader Status"},
+        "stages": [
+            {
+                "id": "prepare_data",
+                "status": {"state": "completed"},
+                "metrics": {"rows": 100},
+            },
+            {
+                "id": "split_and_export",
+                "status": {"state": "completed"},
+                "metrics": {"test_size": 0.0, "test_rows": 25, "truncated": False},
+            },
+        ],
+    }
+    validate_component_status_against_manifest(payload, pipeline_id=PIPELINE_TABULAR_TRAINING)
 
 
 def test_validate_component_stages_warns_on_missing(caplog):
