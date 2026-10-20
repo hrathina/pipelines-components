@@ -93,17 +93,19 @@ def speculator_hidden_state_extraction_pipeline(
         p01_persistent_pvc: Name of the existing PVC in the pipeline namespace,
             mounted at ``/mnt/persistent``, that stores models, datasets, and
             extraction outputs. It is required and has no default.
-        p02_verifier_model: Hugging Face Hub model ID to download when
-            ``p04_download_model`` is true. Leave empty when reusing the model at
-            ``p03_verifier_model_pvc``.
-        p03_verifier_model_pvc: Verifier directory on ``p01_persistent_pvc``. Set this
-            when reusing a previously downloaded model (``p04_download_model=false``)
-            and always for remote vLLM. It is ignored in managed mode when
-            ``p04_download_model=true``. Use a relative path or a ``pvc://`` URI.
+        p02_verifier_model: Hugging Face Hub model ID. Set this when
+            ``p04_download_model`` is true to download it to the PVC. In managed mode,
+            when ``p04_download_model`` is false and ``p03_verifier_model_pvc`` is
+            empty, this ID is passed directly to vLLM.
+        p03_verifier_model_pvc: Optional verifier directory on ``p01_persistent_pvc``.
+            In managed mode with ``p04_download_model`` false, set this to reuse a
+            cached model; if empty, ``p02_verifier_model`` is used directly. Remote
+            mode always requires this PVC-backed path. It is ignored in managed mode
+            when ``p04_download_model`` is true. Use a relative path or a ``pvc://`` URI.
         p04_download_model: Download ``p02_verifier_model`` to the PVC. When false,
-            managed mode requires ``p03_verifier_model_pvc`` to identify an existing
-            verifier. Remote mode uses ``p03_verifier_model_pvc`` for the verifier
-            visible to the external endpoint.
+            managed mode uses ``p03_verifier_model_pvc`` if set, or passes
+            ``p02_verifier_model`` directly otherwise. Remote mode uses
+            ``p03_verifier_model_pvc`` for the verifier visible to the external endpoint.
         p05_dataset_name: Use ``magpie`` (Magpie-Align/Magpie-Llama-3.1-Pro-300K-Filtered),
             ``ultrachat`` (HuggingFaceH4/ultrachat_200k; default), or ``gsm8k``
             (openai/gsm8k). For custom data, use an existing JSON/JSONL file on the
@@ -133,7 +135,8 @@ def speculator_hidden_state_extraction_pipeline(
         p18_target_layer_ids: Exactly four comma-separated verifier layer indices.
             Required when using ``p03_verifier_model_pvc``, when
             ``p04_download_model`` is true, or in remote mode. It may be omitted only
-            in managed mode when ``p02_verifier_model`` is a Hugging Face model ID and
+            in managed mode when ``p03_verifier_model_pvc`` is empty,
+            ``p02_verifier_model`` is a Hugging Face model ID, and
             ``p04_download_model`` is false; the SDK can then infer indices from the
             model config.
         p19_data_extraction_concurrency: Number of concurrent vLLM requests for

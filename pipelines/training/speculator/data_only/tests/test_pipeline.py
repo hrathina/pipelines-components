@@ -113,6 +113,8 @@ class TestSpeculatorHiddenStateExtractionPipeline:
         assert list(compiled_inputs) == PUBLIC_INPUTS
         target_layer_description = compiled_inputs["p18_target_layer_ids"]["description"]
         assert "Required when using" in target_layer_description
+        assert "p03_verifier_model_pvc" in target_layer_description
+        assert "p02_verifier_model" in target_layer_description
         assert "managed mode" in target_layer_description
         assert "download_model" in target_layer_description
 

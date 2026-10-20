@@ -53,6 +53,22 @@ class TestSpeculatorExtractionComponent:
         values = run_speculator.call_args.args[1]
         assert values["verifier_model"] == "models/Qwen3-0.6B"
 
+    def test_managed_mode_uses_hf_verifier_directly_without_cached_path(self, monkeypatch):
+        """Managed extraction keeps a direct HF model ID when no PVC path is set."""
+        run_speculator = _mock_run_speculator(monkeypatch)
+
+        extract_hidden_states.python_func(
+            verifier_model="Qwen/Qwen3-0.6B",
+            output_dir="speculator-output",
+            pvc_path="/workspace",
+            dataset_name="ultrachat",
+            vllm_source="managed",
+            download_model=False,
+        )
+
+        values = run_speculator.call_args.args[1]
+        assert values["verifier_model"] == "Qwen/Qwen3-0.6B"
+
     def test_managed_mode_keeps_hf_verifier_when_download_is_enabled(self, monkeypatch):
         """Managed extraction keeps the HF verifier when the pipeline will download it."""
         run_speculator = mock.Mock(return_value="ok")
