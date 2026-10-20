@@ -6,38 +6,39 @@
 
 Extract verifier hidden states for speculative decoding training using managed or remote vLLM.
 
-Managed mode runs vLLM in the Trainer job. When ``download_model`` is true, ``verifier_model`` is downloaded to ``persistent_pvc``; otherwise, managed mode reuses ``verifier_model_pvc``. Remote mode uses ``vllm_endpoint`` and requires the verifier and hidden-state PVC paths to be accessible to the
-external service. Managed mode writes hidden states under ``output_dir/hidden_states``; remote mode writes them to ``hidden_states_path``.
+Managed mode runs vLLM in the Trainer job. When ``p04_download_model`` is true, ``p02_verifier_model`` is downloaded to ``p01_persistent_pvc``; otherwise, managed mode reuses ``p03_verifier_model_pvc``. Remote mode uses ``p11_vllm_endpoint`` and requires the verifier and hidden-state PVC paths to be
+accessible to the external service. In remote mode, configure ``p07_hidden_states_path`` to match the hidden-state location used by the remote vLLM service on the shared PVC. Managed mode writes hidden states under ``p06_output_dir/hidden_states``.
 
-Relative storage paths are resolved against ``persistent_pvc``. For example, with ``persistent_pvc="shared"``, ``output_dir="speculator-output"`` resolves to ``pvc://shared/speculator-output``. ``speculator-output`` is the default directory name and can be changed.
+Relative storage paths are resolved against ``p01_persistent_pvc``. For example, with ``p01_persistent_pvc="shared"``, ``p06_output_dir="speculator-output"`` resolves to ``pvc://shared/speculator-output``. Numeric prefixes preserve a logical parameter order in the KFP UI, which sorts inputs
+alphabetically.
 
 ## Inputs 📥
 
 | Parameter | Type | Default | Description |
 | --------- | ---- | ------- | ----------- |
-| `persistent_pvc` | `str` | `None` | Existing PVC mounted at ``/mnt/persistent`` for the verifier, local datasets, and outputs. |
-| `download_model` | `bool` | `False` | Download ``verifier_model`` to the PVC. Remote mode uses ``verifier_model_pvc``, which must point to the downloaded or cached model. |
-| `vllm_mode` | `str` | `managed` | Use ``managed`` for a vLLM sidecar in the Trainer job or ``remote`` for an external vLLM service. |
-| `verifier_model` | `str` | `""` | Hugging Face Hub model ID to download when ``download_model`` is true; leave empty when reusing ``verifier_model_pvc``. |
-| `verifier_model_pvc` | `str` | `""` | Path to the cached or downloaded verifier on the PVC; required when reusing a cached model or using remote vLLM. Use a relative path or a ``pvc://`` URI. |
-| `output_dir` | `str` | `speculator-output` | Trainer output directory on the PVC. ``speculator-output`` is the default; choose another relative path or a URI for that PVC. |
-| `dataset_name` | `str` | `ultrachat` | Use ``magpie`` (Magpie-Align/Magpie-Llama-3.1-Pro-300K-Filtered), ``ultrachat`` (HuggingFaceH4/ultrachat_200k; default), or ``gsm8k`` (openai/gsm8k). For custom data, use an existing JSON/JSONL file on the PVC (relative path or ``pvc://<claim>/<path>``); arbitrary Hugging Face dataset IDs are not supported. |
-| `hidden_states_path` | `str` | `speculator-output/hidden_states` | Remote-mode hidden-state output on the PVC shared with vLLM; managed mode writes to ``<output_dir>/hidden_states``. |
-| `vllm_endpoint` | `str` | `""` | URL of the external vLLM service; required for ``remote`` and blank for ``managed``. |
-| `total_seq_len` | `int` | `2048` | Maximum sequence length for dataset preprocessing and vLLM extraction; must be positive. |
-| `speculator_type` | `str` | `eagle3` | Draft architecture; ``eagle3`` is currently the only supported type. |
-| `target_layer_ids` | `str` | `""` | Exactly four comma-separated verifier layer indices; required for the default PVC-backed verifier and remote vLLM. The SDK can infer them only from a Hugging Face model ID passed directly. |
-| `max_samples` | `int` | `16` | Maximum samples to process; ``0`` processes the full dataset. |
-| `regenerate_responses` | `bool` | `False` | Regenerate responses with the verifier; supported only for ``magpie``, ``ultrachat``, and ``gsm8k``. |
-| `data_extraction_concurrency` | `int` | `1` | Number of concurrent vLLM requests for hidden-state extraction; use ``1`` on shared or NFS storage. |
-| `vllm_resource_gpu` | `int` | `1` | GPUs requested by managed vLLM; the SDK currently supports exactly ``1``. |
-| `vllm_resource_memory` | `str` | `96Gi` | Memory requested by the managed vLLM sidecar. |
-| `vllm_gpu_memory_utilization` | `float` | `0.9` | Fraction of GPU memory available to vLLM, in the range ``(0, 1]``. |
-| `vllm_readiness_timeout_minutes` | `int` | `60` | Maximum wait for the managed or remote vLLM endpoint to become ready, in minutes; minimum ``1``. |
-| `packages_to_install` | `str` | `""` | Comma-separated Python packages to install in the Trainer job. |
-| `pip_index_urls` | `str` | `""` | Comma-separated package-index URLs used for Trainer job installs. |
-| `job_envs` | `str` | `NCCL_DEBUG=INFO,PYTHONUNBUFFERED=1` | Comma-separated ``KEY=VALUE`` environment overrides for the extraction job. |
-| `job_runtime` | `str` | `vllm-extract-cuda` | Name of the cluster runtime used by the extraction job. |
+| `p01_persistent_pvc` | `str` | `None` | Name of the existing PVC in the pipeline namespace, mounted at ``/mnt/persistent``, that stores models, datasets, and extraction outputs. It is required and has no default. |
+| `p02_verifier_model` | `str` | `""` | Hugging Face Hub model ID to download when ``p04_download_model`` is true. Leave empty when reusing the model at ``p03_verifier_model_pvc``. |
+| `p03_verifier_model_pvc` | `str` | `""` | Verifier directory on ``p01_persistent_pvc``. Set this when reusing a previously downloaded model (``p04_download_model=false``) and always for remote vLLM. It is ignored in managed mode when ``p04_download_model=true``. Use a relative path or a ``pvc://`` URI. |
+| `p04_download_model` | `bool` | `False` | Download ``p02_verifier_model`` to the PVC. When false, managed mode requires ``p03_verifier_model_pvc`` to identify an existing verifier. Remote mode uses ``p03_verifier_model_pvc`` for the verifier visible to the external endpoint. |
+| `p05_dataset_name` | `str` | `ultrachat` | Use ``magpie`` (Magpie-Align/Magpie-Llama-3.1-Pro-300K-Filtered), ``ultrachat`` (HuggingFaceH4/ultrachat_200k; default), or ``gsm8k`` (openai/gsm8k). For custom data, use an existing JSON/JSONL file on the PVC (relative path or ``pvc://<claim>/<path>``); arbitrary Hugging Face dataset IDs are not supported. |
+| `p06_output_dir` | `str` | `speculator-output` | Directory on ``p01_persistent_pvc`` where extraction outputs are written. The default is ``speculator-output``; use another relative path or URI to choose a different directory. |
+| `p07_hidden_states_path` | `str` | `speculator-output/hidden_states` | Remote-mode output location for extracted hidden states. It must match the location on the shared PVC used by the remote vLLM service. Managed mode ignores this input and writes to ``<p06_output_dir>/hidden_states`` automatically. |
+| `p08_max_samples` | `int` | `16` | Maximum samples to process; ``0`` processes the full dataset. |
+| `p09_regenerate_responses` | `bool` | `False` | Re-generate the assistant responses in the dataset with the verifier model instead of using the original responses. Only supported for the built-in datasets ``magpie``, ``ultrachat``, and ``gsm8k``. |
+| `p10_vllm_mode` | `str` | `managed` | Use ``managed`` for a vLLM sidecar in the job or ``remote`` for an external vLLM service. |
+| `p11_vllm_endpoint` | `str` | `""` | URL of the external vLLM service; required for ``remote`` and blank for ``managed``. |
+| `p12_vllm_resource_gpu` | `int` | `1` | GPUs requested by managed vLLM; the SDK currently supports exactly ``1``. |
+| `p13_vllm_resource_memory` | `str` | `96Gi` | Memory requested by the managed vLLM sidecar. |
+| `p14_vllm_gpu_memory_utilization` | `float` | `0.9` | Fraction of GPU memory available to vLLM, in the range ``(0, 1]``. |
+| `p15_vllm_readiness_timeout_minutes` | `int` | `60` | Maximum wait for the managed or remote vLLM endpoint to become ready, in minutes; minimum ``1``. |
+| `p16_total_seq_len` | `int` | `2048` | Maximum sequence length for dataset preprocessing and vLLM extraction; must be positive. |
+| `p17_speculator_type` | `str` | `eagle3` | Draft architecture; ``eagle3`` is currently the only supported type. |
+| `p18_target_layer_ids` | `str` | `""` | Exactly four comma-separated verifier layer indices. Required when using ``p03_verifier_model_pvc``, when ``p04_download_model`` is true, or in remote mode. It may be omitted only in managed mode when ``p02_verifier_model`` is a Hugging Face model ID and ``p04_download_model`` is false; the SDK can then infer indices from the model config. |
+| `p19_data_extraction_concurrency` | `int` | `1` | Number of concurrent vLLM requests for hidden-state extraction; use ``1`` on shared or NFS storage. |
+| `p20_packages_to_install` | `str` | `""` | Comma-separated Python packages to install in the job. |
+| `p21_pip_index_urls` | `str` | `""` | Comma-separated package-index URLs used for job installs. |
+| `p22_job_envs` | `str` | `NCCL_DEBUG=INFO,PYTHONUNBUFFERED=1` | Comma-separated ``KEY=VALUE`` environment overrides for the job. |
+| `p23_job_runtime` | `str` | `vllm-extract-cuda` | Name of the runtime used by the extraction job. |
 
 ## Metadata 🗂️
 
