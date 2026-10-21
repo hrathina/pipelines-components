@@ -91,10 +91,7 @@ def speculator_offline_pipeline(
     p25_training_scheduler_type: str = "linear",
     p26_training_scheduler_warmup_steps: int = 0,
     p27_training_scheduler_total_steps: int = 0,
-    p28_training_scheduler_num_cosine_cycles: float = 0.5,
-    p29_training_checkpoint_freq: float = 1.0,
     p30_training_save_best: bool = False,
-    p31_training_log_freq: int = 1,
     p32_training_resume_from_checkpoint: bool = False,
     p33_training_resource_cpu: str = "4",
     p34_training_resource_gpu: int = 1,
@@ -102,7 +99,6 @@ def speculator_offline_pipeline(
     p36_job_envs: str = "NCCL_DEBUG=INFO,PYTHONUNBUFFERED=1",
     p37_job_runtime: str = "speculator-model-opt-cuda",
     p38_packages_to_install: str = "",
-    p39_pip_index_urls: str = "",
     # Evaluation configuration
     p40_evaluation_max_samples: int = 80,
     p41_evaluation_max_tokens: int = 256,
@@ -110,7 +106,6 @@ def speculator_offline_pipeline(
     p43_evaluation_num_speculative_tokens: int = 5,
     p44_evaluation_gpu_memory_utilization: float = 0.9,
     p45_evaluation_startup_timeout_seconds: int = 900,
-    p46_evaluation_sample_seed: int = 42,
     # Model registry
     p47_model_registry_address: str = "",
     p48_model_registry_port: int = 8080,
@@ -166,17 +161,22 @@ def speculator_offline_pipeline(
     below ``p10_output_dir``. Training reads processed data from
     ``p12_training_data_path`` and hidden states from ``p11_hidden_states_path``.
     Their defaults match the extraction output; if ``p10_output_dir`` changes, update
-    both paths. ``p15_target_layer_ids`` defaults to empty; supply the verifier's
-    four comma-separated layer IDs. ``p07_data_extraction_max_samples=0`` processes all
+    both paths. ``p15_target_layer_ids`` is required in offline mode: supply four
+    comma-separated layer IDs matching the verifier. The SDK cannot auto-detect layer
+    IDs from the PVC-backed verifier, so this input defaults to empty but must be
+    populated.
+    ``p07_data_extraction_max_samples=0`` processes all
     examples; response regeneration (``p08_data_extraction_regenerate_responses``) applies
-    to built-in datasets, and concurrency ``p09_data_extraction_concurrency=1`` is
-    recommended on shared/NFS PVCs.
+    to built-in datasets. ``p09_data_extraction_concurrency`` controls extraction request
+    concurrency and maps to Speculator's ``datagen_concurrency`` during training, affecting
+    data-loading throughput. Use ``1`` on shared/NFS PVCs to limit concurrent I/O.
 
     Extraction and training use the same ``p37_job_runtime``. The jobs share
-    environment overrides, packages, and package indexes through ``p36_job_envs``,
-    ``p38_packages_to_install``, and ``p39_pip_index_urls``. Package installation runs
-    in Trainer worker pods; restrict run access for these inputs to trusted users and
-    approved package sources. The ``kubernetes-credentials`` secret with
+    environment overrides and packages through ``p36_job_envs`` and
+    ``p38_packages_to_install``. Set ``PIP_INDEX_URL`` or ``PIP_EXTRA_INDEX_URL`` in
+    ``p36_job_envs`` to use a custom package index. Package installation runs in Trainer
+    worker pods; restrict run access for these inputs to trusted users and approved
+    package sources. The ``kubernetes-credentials`` secret with
     ``KUBERNETES_SERVER_URL`` and ``KUBERNETES_AUTH_TOKEN`` is mounted only in the KFP
     launcher tasks to submit and monitor Trainer jobs, not forwarded to Trainer workers.
     Scope it to the minimum Trainer API permissions required for runtime selection,
@@ -187,6 +187,9 @@ def speculator_offline_pipeline(
 
     Training runs after extraction. A draft vocabulary size of ``0`` lets Trainer
     derive it; scheduler warmup and total steps of ``0`` let Trainer calculate them.
+    Training uses ``0.5`` cosine cycles when the cosine scheduler is selected,
+    checkpoints every epoch, and logs every step. Evaluation uses a fixed sampling
+    seed of ``42``.
     The completed draft is written to ``pvc://<p01_persistent_pvc>/final_model``.
     Each run replaces this shared path; use a separate PVC per revision if earlier
     Registry versions must continue referencing their original weights.
@@ -196,7 +199,7 @@ def speculator_offline_pipeline(
     ``pvc://`` URIs must reference ``p01_persistent_pvc``. Avoid leading or trailing
     whitespace. Evaluation receives only the optional ``hf-token`` secret, not
     Kubernetes Trainer credentials.
-    ``p40``–``p46`` control the evaluation request limit, generation, sampling, and
+    ``p40``–``p45`` control the evaluation request limit, generation, sampling, and
     startup timeout.
 
     ### Model Registry and serving
@@ -239,7 +242,8 @@ def speculator_offline_pipeline(
         p07_data_extraction_max_samples: Maximum extraction examples. Set to ``0`` to process the full dataset.
         p08_data_extraction_regenerate_responses: Regenerate assistant responses with the verifier instead of using
             original responses. Supported only for the built-in datasets.
-        p09_data_extraction_concurrency: Number of concurrent extraction requests. Use ``1`` on shared or NFS PVCs.
+        p09_data_extraction_concurrency: Extraction request concurrency and training ``datagen_concurrency``;
+            affects training data-loading throughput. Use ``1`` on shared or NFS PVCs.
         p10_output_dir: PVC-relative directory for extraction output, processed training data, and checkpoints. The
             final draft is copied to ``final_model`` at the PVC root.
         p11_hidden_states_path: PVC-relative hidden-state directory written by extraction and read by training. Keep
@@ -248,8 +252,9 @@ def speculator_offline_pipeline(
             with ``p10_output_dir`` when changing the defaults.
         p13_total_seq_len: Positive maximum sequence length used for extraction, training, and serving.
         p14_speculator_type: Draft architecture. The current Trainer and evaluator support ``eagle3``.
-        p15_target_layer_ids: Four comma-separated verifier layer IDs. It defaults to empty; provide the IDs for the
-            selected verifier.
+        p15_target_layer_ids: Required in offline mode. Supply four comma-separated layer IDs matching the verifier.
+            The SDK cannot auto-detect layer IDs from the PVC-backed verifier; the input defaults to empty but must be
+            populated.
         p16_training_epochs: Number of training epochs.
         p17_training_lr: Learning rate for draft-model training.
         p18_training_draft_vocab_size: Draft vocabulary size. ``0`` lets the Trainer SDK derive it.
@@ -262,18 +267,16 @@ def speculator_offline_pipeline(
         p25_training_scheduler_type: Learning-rate scheduler: ``linear``, ``cosine``, or ``none``.
         p26_training_scheduler_warmup_steps: Warmup steps. ``0`` lets the SDK calculate them.
         p27_training_scheduler_total_steps: Total scheduler steps. ``0`` lets the SDK calculate them.
-        p28_training_scheduler_num_cosine_cycles: Number of cosine cycles; ignored by other scheduler types.
-        p29_training_checkpoint_freq: Checkpoint interval in epochs.
         p30_training_save_best: Save the best checkpoint by validation loss.
-        p31_training_log_freq: Number of training steps between log updates.
         p32_training_resume_from_checkpoint: Resume from a saved checkpoint when supported by the runtime.
         p33_training_resource_cpu: CPU request for the training worker.
         p34_training_resource_gpu: Number of GPUs requested for the training worker.
         p35_training_resource_memory: Memory request for the training worker.
         p36_job_envs: Comma-separated ``KEY=VALUE`` environment overrides shared by extraction and training jobs.
+            Set ``PIP_INDEX_URL`` or ``PIP_EXTRA_INDEX_URL`` here to select a custom index for
+            ``p38_packages_to_install``.
         p37_job_runtime: ClusterTrainingRuntime shared by hidden-state extraction and draft training.
         p38_packages_to_install: Comma-separated Python packages installed in extraction and training jobs.
-        p39_pip_index_urls: Comma-separated package-index URLs used when installing job packages.
         p40_evaluation_max_samples: Maximum GuideLLM requests per evaluation sweep point; must be positive.
         p41_evaluation_max_tokens: Maximum tokens generated per evaluation request; must be positive.
         p42_evaluation_temperature: Sampling temperature passed to GuideLLM. ``0`` is deterministic.
@@ -281,7 +284,6 @@ def speculator_offline_pipeline(
         p44_evaluation_gpu_memory_utilization: GPU memory fraction for evaluation and serving, greater than ``0`` and
             at most ``1.0``.
         p45_evaluation_startup_timeout_seconds: Maximum wait for the evaluation vLLM server to become ready.
-        p46_evaluation_sample_seed: Seed used for deterministic sampling of local evaluation datasets.
         p47_model_registry_address: Model Registry hostname. Enter only the host, not the scheme or API path. Its
             default is empty, which skips registration.
         p48_model_registry_port: HTTP REST service port copied from the Model Registry URL; ``8080`` is common.
@@ -318,10 +320,10 @@ def speculator_offline_pipeline(
     training_scheduler_type = p25_training_scheduler_type
     training_scheduler_warmup_steps = p26_training_scheduler_warmup_steps
     training_scheduler_total_steps = p27_training_scheduler_total_steps
-    training_scheduler_num_cosine_cycles = p28_training_scheduler_num_cosine_cycles
-    training_checkpoint_freq = p29_training_checkpoint_freq
+    training_scheduler_num_cosine_cycles = 0.5
+    training_checkpoint_freq = 1.0
     training_save_best = p30_training_save_best
-    training_log_freq = p31_training_log_freq
+    training_log_freq = 1
     training_resume_from_checkpoint = p32_training_resume_from_checkpoint
     training_resource_cpu = p33_training_resource_cpu
     training_resource_gpu = p34_training_resource_gpu
@@ -329,14 +331,12 @@ def speculator_offline_pipeline(
     job_envs = p36_job_envs
     training_runtime = p37_job_runtime
     packages_to_install = p38_packages_to_install
-    pip_index_urls = p39_pip_index_urls
     evaluation_max_samples = p40_evaluation_max_samples
     evaluation_max_tokens = p41_evaluation_max_tokens
     evaluation_temperature = p42_evaluation_temperature
     num_speculative_tokens = p43_evaluation_num_speculative_tokens
     gpu_memory_utilization = p44_evaluation_gpu_memory_utilization
     evaluation_startup_timeout_seconds = p45_evaluation_startup_timeout_seconds
-    evaluation_sample_seed = p46_evaluation_sample_seed
     model_registry_address = p47_model_registry_address
     model_registry_port = p48_model_registry_port
     model_registry_name = p49_model_registry_name
@@ -358,7 +358,6 @@ def speculator_offline_pipeline(
         data_extraction_regenerate_responses=data_extraction_regenerate_responses,
         data_extraction_concurrency=data_extraction_concurrency,
         packages_to_install=packages_to_install,
-        pip_index_urls=pip_index_urls,
         training_envs=job_envs,
         vllm_source="remote",
         vllm_endpoint=vllm_endpoint,
@@ -405,7 +404,6 @@ def speculator_offline_pipeline(
         training_resource_memory=training_resource_memory,
         data_extraction_concurrency=data_extraction_concurrency,
         packages_to_install=packages_to_install,
-        pip_index_urls=pip_index_urls,
         training_envs=job_envs,
         training_runtime=training_runtime,
         persistent_pvc=persistent_pvc,
@@ -431,7 +429,7 @@ def speculator_offline_pipeline(
         evaluation_num_speculative_tokens=num_speculative_tokens,
         evaluation_gpu_memory_utilization=gpu_memory_utilization,
         evaluation_startup_timeout_seconds=evaluation_startup_timeout_seconds,
-        evaluation_sample_seed=evaluation_sample_seed,
+        evaluation_sample_seed=42,
     )
     evaluation_task.after(train_task)
     kfp.kubernetes.mount_pvc(

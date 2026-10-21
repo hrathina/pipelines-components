@@ -103,6 +103,7 @@ Model Registry setup: In the RHOAI dashboard, open **AI Hub > Models > Model reg
     - Sridhar1030
   - Reviewers:
     - ChughShilpa
+    - efazal
     - hrathina
 
 ## Additional Resources 📚
