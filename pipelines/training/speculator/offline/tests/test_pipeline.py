@@ -199,12 +199,10 @@ def test_pipeline_wires_shared_pvc_paths_and_stage_inputs(tmp_path):
     assert serving_inputs["verifier_model_dir"]["componentInputParameter"] == "p02_verifier_model_pvc"
     assert serving_inputs["runtime_image"]["componentInputParameter"] == "p52_serving_runtime_image"
     assert (
-        serving_inputs["num_speculative_tokens"]["componentInputParameter"]
-        == "p43_evaluation_num_speculative_tokens"
+        serving_inputs["num_speculative_tokens"]["componentInputParameter"] == "p43_evaluation_num_speculative_tokens"
     )
     assert (
-        serving_inputs["gpu_memory_utilization"]["componentInputParameter"]
-        == "p44_evaluation_gpu_memory_utilization"
+        serving_inputs["gpu_memory_utilization"]["componentInputParameter"] == "p44_evaluation_gpu_memory_utilization"
     )
 
 
