@@ -66,6 +66,7 @@ alphabetically.
     - Sridhar1030
   - Reviewers:
     - ChughShilpa
+    - efazal
     - hrathina
 
 ## Additional Resources 📚
