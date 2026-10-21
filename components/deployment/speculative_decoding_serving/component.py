@@ -48,8 +48,8 @@ def speculative_decoding_serving(
     """Serve a verifier and Eagle3 draft model through one vLLM endpoint.
 
     The verifier and draft directories must already exist on ``model_cache_pvc``.
-    Pass either a path relative to the PVC root or a matching
-    ``pvc://<model_cache_pvc>/<path>`` URI. KServe mounts the PVC root at ``/mnt/models``. The draft directory should
+    Pass either a path relative to the PVC root or a ``pvc://<model_cache_pvc>/<path>``
+    URI. KServe mounts the PVC root at ``/mnt/models``. The draft directory should
     contain the speculator checkpoint's ``config.json`` and weights. vLLM receives
     an Eagle3 ``--speculative-config`` that points to the draft path under that
     root; the verifier is the primary ``--model``.

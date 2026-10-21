@@ -116,7 +116,7 @@ def test_pipeline_compiles_and_orders_all_stages(tmp_path):
     tasks = pipeline_spec["root"]["dag"]["tasks"]
     assert "download-model" not in tasks
     assert "validate-required-offline-inputs" not in tasks
-    assert "extract-speculator" in tasks["train-speculator-mode"]["dependentTasks"]
+    assert "extract-hidden-states" in tasks["train-speculator-mode"]["dependentTasks"]
     assert "train-speculator-mode" in tasks["evaluate-speculator"]["dependentTasks"]
     assert "evaluate-speculator" in tasks["kubeflow-model-registry"]["dependentTasks"]
     assert "kubeflow-model-registry" in tasks["speculative-decoding-serving"]["dependentTasks"]
@@ -134,7 +134,7 @@ def test_pipeline_wires_shared_pvc_paths_and_stage_inputs(tmp_path):
     pipeline_spec, _ = _load_pipeline_documents(output_path)
     tasks = pipeline_spec["root"]["dag"]["tasks"]
 
-    extraction_inputs = tasks["extract-speculator"]["inputs"]["parameters"]
+    extraction_inputs = tasks["extract-hidden-states"]["inputs"]["parameters"]
     assert extraction_inputs["persistent_pvc"]["componentInputParameter"] == "p01_persistent_pvc"
     assert extraction_inputs["verifier_model_pvc"]["componentInputParameter"] == "p02_verifier_model_pvc"
     assert extraction_inputs["dataset_name"]["componentInputParameter"] == "p04_dataset_name"
@@ -184,7 +184,7 @@ def test_pipeline_scopes_secrets_to_tasks_that_need_them(tmp_path):
     _compile_pipeline(output_path)
     pipeline_spec, platform_spec = _load_pipeline_documents(output_path)
 
-    for task_name in ("extract-speculator", "train-speculator-mode"):
+    for task_name in ("extract-hidden-states", "train-speculator-mode"):
         secrets = _executor_config(pipeline_spec, platform_spec, task_name)["secretAsEnv"]
         assert {secret["secretName"] for secret in secrets} == {"kubernetes-credentials"}
         assert all(secret["optional"] is False for secret in secrets)
