@@ -6,13 +6,13 @@ from ..pipeline import speculator_online_pipeline
 
 PUBLIC_INPUTS = [
     "p01_persistent_pvc",
-    "p02_verifier_model",
-    "p03_verifier_model_pvc",
-    "p04_download_model",
     "p05_target_layer_ids",
     "p06_dataset_name",
     "p07_evaluation_dataset_uri",
     "p08_serving_namespace",
+    "p02_verifier_model",
+    "p03_verifier_model_pvc",
+    "p04_download_model",
     "p09_data_extraction_max_samples",
     "p10_data_extraction_regenerate_responses",
     "p11_data_extraction_concurrency",
@@ -70,7 +70,7 @@ def test_pipeline_exposes_stage_ordered_inputs():
     """Numeric prefixes preserve the online workflow input order in the KFP UI."""
     inputs = speculator_online_pipeline.component_spec.inputs
 
-    assert sorted(inputs) == PUBLIC_INPUTS
+    assert list(inputs) == PUBLIC_INPUTS
     assert inputs["p01_persistent_pvc"].default is None
     assert inputs["p02_verifier_model"].default == ""
     assert inputs["p03_verifier_model_pvc"].default == ""
@@ -108,7 +108,7 @@ def test_pipeline_compiles_as_a_single_online_trainer_job(tmp_path):
     _compile_pipeline(output_path)
     pipeline_spec, _ = _load_pipeline_documents(output_path)
 
-    assert sorted(pipeline_spec["root"]["inputDefinitions"]["parameters"]) == PUBLIC_INPUTS
+    assert sorted(pipeline_spec["root"]["inputDefinitions"]["parameters"]) == sorted(PUBLIC_INPUTS)
     tasks = pipeline_spec["root"]["dag"]["tasks"]
     assert "download-model" in tasks
     assert "online-draft-model-training" in tasks
