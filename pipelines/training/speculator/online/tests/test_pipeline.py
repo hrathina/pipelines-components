@@ -66,6 +66,14 @@ def _load_pipeline_documents(path):
     return list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
 
 
+def _executor_config(pipeline_spec, platform_spec, task):
+    component_name = pipeline_spec["root"]["dag"]["tasks"][task]["componentRef"]["name"]
+    executor_label = pipeline_spec["components"][component_name]["executorLabel"]
+    component_executor = pipeline_spec["deploymentSpec"]["executors"][executor_label]
+    platform_executor = platform_spec["platforms"]["kubernetes"]["deploymentSpec"]["executors"][executor_label]
+    return {**component_executor, **platform_executor}
+
+
 def test_pipeline_exposes_stage_ordered_inputs():
     """Numeric prefixes preserve the online workflow input order in the KFP UI."""
     inputs = speculator_online_pipeline.component_spec.inputs
@@ -168,16 +176,30 @@ def test_evaluation_and_serving_share_performance_inputs_and_fixed_seed(tmp_path
     )
 
 
+def test_pipeline_scopes_secrets_to_tasks_that_need_them(tmp_path):
+    """HF token is scoped to download, training, and evaluation; registry/serving get none."""
+    output_path = tmp_path / "speculator_online.yaml"
+    _compile_pipeline(output_path)
+    pipeline_spec, platform_spec = _load_pipeline_documents(output_path)
+
+    for task_name in ("download-model", "online-draft-model-training", "evaluate-draft-model"):
+        secrets = _executor_config(pipeline_spec, platform_spec, task_name)["secretAsEnv"]
+        assert "hf-token" in {secret["secretName"] for secret in secrets}
+
+    secrets = _executor_config(pipeline_spec, platform_spec, "online-draft-model-training")["secretAsEnv"]
+    assert "kubernetes-credentials" in {secret["secretName"] for secret in secrets}
+
+    for task_name in ("kubeflow-model-registry", "speculative-decoding-serving"):
+        secrets = _executor_config(pipeline_spec, platform_spec, task_name).get("secretAsEnv", [])
+        assert "hf-token" not in {secret.get("secretName") for secret in secrets}
+
+
 def test_evaluation_requests_gpu_accelerator(tmp_path):
     """The evaluator is scheduled on an NVIDIA GPU in the compiled pipeline."""
     output_path = tmp_path / "speculator_online.yaml"
     _compile_pipeline(output_path)
     pipeline_spec, platform_spec = _load_pipeline_documents(output_path)
-    component_name = pipeline_spec["root"]["dag"]["tasks"]["evaluate-draft-model"]["componentRef"]["name"]
-    executor_label = pipeline_spec["components"][component_name]["executorLabel"]
-    component_executor = pipeline_spec["deploymentSpec"]["executors"][executor_label]
-    platform_executor = platform_spec["platforms"]["kubernetes"]["deploymentSpec"]["executors"][executor_label]
-    executor = {**component_executor, **platform_executor}
+    executor = _executor_config(pipeline_spec, platform_spec, "evaluate-draft-model")
 
     accelerator = executor["container"]["resources"]["accelerator"]
     assert accelerator["resourceType"] == "nvidia.com/gpu"
