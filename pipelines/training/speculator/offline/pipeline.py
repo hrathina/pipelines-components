@@ -6,8 +6,8 @@ from kfp import dsl
 
 from components.deployment.kubeflow_model_registry import kubeflow_model_registry
 from components.deployment.speculative_decoding_serving import speculative_decoding_serving
-from components.evaluation.speculator import evaluate_speculator
-from components.training.finetuning.speculator import extract_hidden_states, train_speculator_mode
+from components.evaluation.speculator import evaluate_draft_model
+from components.training.finetuning.speculator import extract_hidden_states, train_draft_model
 
 PVC_SIZE = "200Gi"
 PVC_STORAGE_CLASS = "nfs-csi"
@@ -372,7 +372,7 @@ def speculator_offline_pipeline(
     )
     _attach_trainer_credentials(extract_task)
 
-    train_task = train_speculator_mode(
+    train_task = train_draft_model(
         verifier_model=verifier_model_pvc,
         verifier_model_pvc=verifier_model_pvc,
         output_dir=output_dir,
@@ -417,7 +417,7 @@ def speculator_offline_pipeline(
     )
     _attach_trainer_credentials(train_task)
 
-    evaluation_task = evaluate_speculator(
+    evaluation_task = evaluate_draft_model(
         verifier_model=verifier_model_pvc,
         draft_model_path="/mnt/persistent/final_model",
         evaluation_dataset_uri=evaluation_dataset_uri,

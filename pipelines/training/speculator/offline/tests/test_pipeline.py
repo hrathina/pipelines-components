@@ -118,19 +118,19 @@ def test_pipeline_compiles_and_orders_all_stages(tmp_path):
     tasks = pipeline_spec["root"]["dag"]["tasks"]
     assert "download-model" not in tasks
     assert "validate-required-offline-inputs" not in tasks
-    assert "extract-hidden-states" in tasks["train-speculator-mode"]["dependentTasks"]
-    assert "train-speculator-mode" in tasks["evaluate-speculator"]["dependentTasks"]
-    assert "evaluate-speculator" in tasks["kubeflow-model-registry"]["dependentTasks"]
+    assert "extract-hidden-states" in tasks["train-draft-model"]["dependentTasks"]
+    assert "train-draft-model" in tasks["evaluate-draft-model"]["dependentTasks"]
+    assert "evaluate-draft-model" in tasks["kubeflow-model-registry"]["dependentTasks"]
     assert "kubeflow-model-registry" in tasks["speculative-decoding-serving"]["dependentTasks"]
 
-    assert tasks["train-speculator-mode"]["taskInfo"]["name"] == "train-speculator-mode"
-    assert tasks["evaluate-speculator"]["taskInfo"]["name"] == "evaluate-speculator"
+    assert tasks["train-draft-model"]["taskInfo"]["name"] == "train-draft-model"
+    assert tasks["evaluate-draft-model"]["taskInfo"]["name"] == "evaluate-draft-model"
     assert tasks["kubeflow-model-registry"]["taskInfo"]["name"] == "kubeflow-model-registry"
-    assert "displayName" not in tasks["train-speculator-mode"]["taskInfo"]
-    assert "displayName" not in tasks["evaluate-speculator"]["taskInfo"]
+    assert "displayName" not in tasks["train-draft-model"]["taskInfo"]
+    assert "displayName" not in tasks["evaluate-draft-model"]["taskInfo"]
     assert "displayName" not in tasks["kubeflow-model-registry"]["taskInfo"]
-    assert "displayName" not in tasks["train-speculator-mode"]["taskInfo"]
-    assert "displayName" not in tasks["evaluate-speculator"]["taskInfo"]
+    assert "displayName" not in tasks["train-draft-model"]["taskInfo"]
+    assert "displayName" not in tasks["evaluate-draft-model"]["taskInfo"]
 
 
 def test_pipeline_wires_shared_pvc_paths_and_stage_inputs(tmp_path):
@@ -154,7 +154,7 @@ def test_pipeline_wires_shared_pvc_paths_and_stage_inputs(tmp_path):
         extraction_inputs["data_extraction_concurrency"]["componentInputParameter"] == "p09_data_extraction_concurrency"
     )
 
-    training_inputs = tasks["train-speculator-mode"]["inputs"]["parameters"]
+    training_inputs = tasks["train-draft-model"]["inputs"]["parameters"]
     assert training_inputs["persistent_pvc"]["componentInputParameter"] == "p01_persistent_pvc"
     assert training_inputs["verifier_model_pvc"]["componentInputParameter"] == "p02_verifier_model_pvc"
     assert training_inputs["training_data_path"]["componentInputParameter"] == "p12_training_data_path"
@@ -172,7 +172,7 @@ def test_pipeline_wires_shared_pvc_paths_and_stage_inputs(tmp_path):
     extraction_envs = tasks["extract-hidden-states"]["inputs"]["parameters"]["training_envs"]
     assert extraction_envs["componentInputParameter"] == "p36_job_envs"
 
-    evaluation_inputs = tasks["evaluate-speculator"]["inputs"]["parameters"]
+    evaluation_inputs = tasks["evaluate-draft-model"]["inputs"]["parameters"]
     assert evaluation_inputs["evaluation_dataset_uri"]["componentInputParameter"] == "p05_evaluation_dataset_uri"
     assert evaluation_inputs["evaluation_dataset_pvc"]["componentInputParameter"] == "p01_persistent_pvc"
     assert (
@@ -212,12 +212,12 @@ def test_pipeline_scopes_secrets_to_tasks_that_need_them(tmp_path):
     _compile_pipeline(output_path)
     pipeline_spec, platform_spec = _load_pipeline_documents(output_path)
 
-    for task_name in ("extract-hidden-states", "train-speculator-mode"):
+    for task_name in ("extract-hidden-states", "train-draft-model"):
         secrets = _executor_config(pipeline_spec, platform_spec, task_name)["secretAsEnv"]
         assert {secret["secretName"] for secret in secrets} == {"kubernetes-credentials"}
         assert all(secret["optional"] is False for secret in secrets)
 
-    secrets = _executor_config(pipeline_spec, platform_spec, "evaluate-speculator")["secretAsEnv"]
+    secrets = _executor_config(pipeline_spec, platform_spec, "evaluate-draft-model")["secretAsEnv"]
     assert {secret["secretName"] for secret in secrets} == {"hf-token"}
     assert all(secret["optional"] is True for secret in secrets)
 
@@ -232,7 +232,7 @@ def test_evaluation_requests_gpu_accelerator(tmp_path):
     _compile_pipeline(output_path)
     pipeline_spec, platform_spec = _load_pipeline_documents(output_path)
 
-    executor = _executor_config(pipeline_spec, platform_spec, "evaluate-speculator")
+    executor = _executor_config(pipeline_spec, platform_spec, "evaluate-draft-model")
     accelerator = executor["container"]["resources"]["accelerator"]
     assert accelerator["resourceType"] == "nvidia.com/gpu"
     assert accelerator["count"] == "1"
