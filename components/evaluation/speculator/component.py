@@ -319,7 +319,12 @@ def evaluate_draft_model(
     draft_model_path = draft_model_path.strip()
     evaluation_dataset_uri = evaluation_dataset_uri.strip()
     evaluation_speculator_type = evaluation_speculator_type.strip()
-    evaluation_dataset_pvc = evaluation_dataset_pvc.strip()
+    # evaluation_dataset_pvc is used verbatim as a Kubernetes PVC name, so reject
+    # stray whitespace with a clear error instead of silently fixing it.
+    if evaluation_dataset_pvc != evaluation_dataset_pvc.strip():
+        raise ValueError(
+            f"evaluation_dataset_pvc must not contain leading or trailing whitespace (got {evaluation_dataset_pvc!r})."
+        )
     evaluation_model_mount_path = evaluation_model_mount_path.strip()
     evaluation_dataset_mount_path = evaluation_dataset_mount_path.strip()
 
