@@ -314,6 +314,15 @@ def evaluate_draft_model(
 
     import requests
 
+    # Strip leading/trailing whitespace from every string input before use.
+    verifier_model = verifier_model.strip()
+    draft_model_path = draft_model_path.strip()
+    evaluation_dataset_uri = evaluation_dataset_uri.strip()
+    evaluation_speculator_type = evaluation_speculator_type.strip()
+    evaluation_dataset_pvc = evaluation_dataset_pvc.strip()
+    evaluation_model_mount_path = evaluation_model_mount_path.strip()
+    evaluation_dataset_mount_path = evaluation_dataset_mount_path.strip()
+
     if shutil.which("vllm") is None:
         raise RuntimeError("vllm binary not found - ensure vLLM is installed in the base image")
     if evaluation_max_samples <= 0:
